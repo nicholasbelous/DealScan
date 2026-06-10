@@ -29,6 +29,8 @@ Build only what's listed here. Do not add features, dashboards, or abstractions 
 - **Storage** — `chrome.storage.local` only; no sync, no remote DB
 - **API calls** — made from the service worker (background), never from content scripts
 - **Side panel** is the primary UI; the toolbar icon opens it directly via `manifest.json`
+- **Default model** — `claude-sonnet-4-6` (user override via Options). Chosen over Opus for cost: keeps per-eval cost affordable for the "free for friends" goal while keeping strong reasoning. Opus would be ~10–20× pricier with web search.
+- **Anthropic calls use plain `fetch`** (no SDK) with the `anthropic-dangerous-direct-browser-access` header, since this is a browser/extension context
 
 ## File Layout
 ```
