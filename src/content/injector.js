@@ -44,11 +44,21 @@
     });
 
     btn.addEventListener("click", () => {
+      // After an extension reload, scripts already in the page are orphaned
+      // and chrome.runtime calls throw. Tell the user to refresh instead.
+      if (!chrome.runtime?.id) {
+        btn.textContent = "↻ Refresh page to use";
+        return;
+      }
       btn.textContent = "⏳ Opening…";
-      chrome.runtime.sendMessage({ type: "OPEN_SIDE_PANEL" }, () => {
-        // Reset label whether it succeeded or the panel was already open.
-        setTimeout(() => (btn.textContent = "⚡ Evaluate Deal"), 1500);
-      });
+      try {
+        chrome.runtime.sendMessage({ type: "OPEN_SIDE_PANEL" }, () => {
+          void chrome.runtime.lastError; // already-open etc. — not actionable
+          setTimeout(() => (btn.textContent = "⚡ Evaluate Deal"), 1500);
+        });
+      } catch {
+        btn.textContent = "↻ Refresh page to use";
+      }
     });
 
     document.body.appendChild(btn);

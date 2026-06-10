@@ -15,6 +15,14 @@
   let lastUrl = location.href;
 
   const observer = new MutationObserver(() => {
+    // After an extension reload this script is orphaned and chrome.runtime
+    // calls throw — stop observing entirely; the fresh script takes over
+    // once the page is refreshed.
+    if (!chrome.runtime?.id) {
+      observer.disconnect();
+      return;
+    }
+
     if (location.href === lastUrl) return;
     lastUrl = location.href;
 
@@ -23,9 +31,13 @@
 
     // Remote: let the side panel know the listing changed. The panel may not
     // be open — swallow the "no receiver" error that throws in that case.
-    chrome.runtime
-      .sendMessage({ type: "LISTING_CHANGED", url: location.href })
-      .catch(() => {});
+    try {
+      chrome.runtime
+        .sendMessage({ type: "LISTING_CHANGED", url: location.href })
+        .catch(() => {});
+    } catch {
+      observer.disconnect();
+    }
   });
 
   observer.observe(document.documentElement, { childList: true, subtree: true });
