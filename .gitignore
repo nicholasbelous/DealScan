@@ -1,0 +1,26 @@
+# Secrets — never commit real keys. .env.example (the placeholder template) is
+# intentionally NOT ignored so others know what keys are needed.
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Build / packaging output
+dist/
+build/
+*.zip
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# Test coverage
+coverage/
