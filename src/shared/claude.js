@@ -15,13 +15,18 @@ const API_URL = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
 
 // Default model. Override per-user via the Options page (stored in settings).
-// NOTE: cost scales a lot with this choice — see the eval-cost table in the
-// README. Sonnet/Haiku are far cheaper than Opus for this workload.
-const DEFAULT_MODEL = "claude-sonnet-4-6";
+// Haiku by default: web search results dominate token cost regardless of
+// model, and Haiku's input price is 1/3 of Sonnet's for near-equal quality on
+// this lookup-and-score workload.
+const DEFAULT_MODEL = "claude-haiku-4-5";
+
+// Only these models accept output_config.effort; sending it to Haiku errors.
+const EFFORT_MODELS = /sonnet-4-6|opus-4/;
 
 // Server-side web search tool — lets Claude look up real market prices.
-// max_uses kept low: each search round adds a full network round trip.
-const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 3 };
+// max_uses is the single biggest cost lever: every search injects thousands
+// of result tokens that get re-billed on each subsequent round.
+const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 2 };
 
 // Hard cap per API request so a stuck call fails loudly instead of spinning.
 const REQUEST_TIMEOUT_MS = 90_000;
@@ -48,8 +53,9 @@ const VERDICT_SCHEMA = `{
 const SYSTEM_PROMPT = `You are DealScan, an expert at evaluating Facebook Marketplace listings.
 
 You receive a scraped listing (title, price, condition, description, seller info).
-Use web search to find real current market prices for the item — check completed
-sales, retail prices, and comparable used listings.
+Run ONE targeted web search to find the item's current market price (e.g.
+"<item> used price"). Only search a second time if the first result is truly
+unusable. Searches are expensive — never browse exploratively.
 
 Then return your evaluation as a SINGLE JSON object matching this exact shape,
 with no prose before or after it:
@@ -80,10 +86,11 @@ export async function evaluateListing(listing) {
   ];
 
   // Web search runs a server-side loop; if it pauses (stop_reason
-  // "pause_turn") we re-send to let it continue. Cap the continuations.
+  // "pause_turn") we re-send to let it continue. Each continuation re-bills
+  // the whole conversation (cache softens this) — keep the cap tight.
   let response = await callMessages({ apiKey: anthropicKey, model, messages });
 
-  for (let i = 0; i < 5 && response.stop_reason === "pause_turn"; i++) {
+  for (let i = 0; i < 2 && response.stop_reason === "pause_turn"; i++) {
     messages.push({ role: "assistant", content: response.content });
     response = await callMessages({ apiKey: anthropicKey, model, messages });
   }
@@ -104,7 +111,7 @@ function buildUserPrompt(listing) {
     `Seller: ${listing.seller ?? "(not stated)"}`,
     "",
     "Description:",
-    listing.description ?? "(none)",
+    (listing.description ?? "(none)").slice(0, 1500),
   ];
   if (listing.images?.length) {
     lines.push("", `Image count: ${listing.images.length}`);
@@ -115,6 +122,24 @@ function buildUserPrompt(listing) {
 async function callMessages({ apiKey, model, messages }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  const resolvedModel = model || DEFAULT_MODEL;
+  const body = {
+    model: resolvedModel,
+    max_tokens: 2048,
+    // Auto-cache the conversation prefix: search-result tokens re-sent on
+    // continuation rounds are read from cache (~0.1x price) instead of
+    // being re-billed in full. This is the main cost control.
+    cache_control: { type: "ephemeral" },
+    system: SYSTEM_PROMPT,
+    tools: [WEB_SEARCH_TOOL],
+    messages,
+  };
+  // Sonnet 4.6 defaults to effort "high" — slower and pricier than this
+  // workload needs. (Haiku doesn't accept the param at all.)
+  if (EFFORT_MODELS.test(resolvedModel)) {
+    body.output_config = { effort: "medium" };
+  }
 
   let res;
   try {
@@ -128,16 +153,7 @@ async function callMessages({ apiKey, model, messages }) {
         // Required for calls made directly from a browser/extension context.
         "anthropic-dangerous-direct-browser-access": "true",
       },
-      body: JSON.stringify({
-        model: model || DEFAULT_MODEL,
-        max_tokens: 2048,
-        // Sonnet 4.6 defaults to effort "high" — slower and pricier than this
-        // workload needs. Medium keeps quality with much better latency.
-        output_config: { effort: "medium" },
-        system: SYSTEM_PROMPT,
-        tools: [WEB_SEARCH_TOOL],
-        messages,
-      }),
+      body: JSON.stringify(body),
     });
   } catch (err) {
     if (err.name === "AbortError") {
