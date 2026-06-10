@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "DealScan — Marketplace Deal Evaluator",
+  "version": "0.1.0",
+  "description": "Evaluate Facebook Marketplace listings with Claude AI — deal score, price breakdown, red flags, and negotiation tips.",
+
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://www.facebook.com/marketplace/*",
+    "https://api.anthropic.com/*",
+    "https://api.ebay.com/*"
+  ],
+
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/marketplace/item/*"],
+      "js": [
+        "src/content/scraper.js",
+        "src/content/injector.js",
+        "src/content/observer.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+
+  "action": {
+    "default_title": "Open DealScan",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  }
+}
