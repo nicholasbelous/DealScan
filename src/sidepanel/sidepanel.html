@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DealScan</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <header class="app-header">
+    <span class="logo">⚡ DealScan</span>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="evaluate" role="tab">Evaluate</button>
+      <button class="tab" data-tab="history" role="tab">History</button>
+      <button class="tab" data-tab="watchlist" role="tab">Watchlist</button>
+    </nav>
+  </header>
+
+  <!-- ============ EVALUATE TAB ============ -->
+  <main id="view-evaluate" class="view active">
+
+    <!-- State: not on a listing page -->
+    <section id="state-idle" class="state hidden">
+      <div class="empty-card">
+        <p class="empty-icon">🛍️</p>
+        <p>Open a Facebook Marketplace listing, then click the
+          <strong>⚡ Evaluate Deal</strong> button on the page or re-open this panel.</p>
+      </div>
+    </section>
+
+    <!-- State: working -->
+    <section id="state-loading" class="state hidden">
+      <div class="empty-card">
+        <div class="spinner"></div>
+        <p id="loading-label">Reading listing…</p>
+      </div>
+    </section>
+
+    <!-- State: error -->
+    <section id="state-error" class="state hidden">
+      <div class="empty-card error-card">
+        <p class="empty-icon">⚠️</p>
+        <p id="error-message">Something went wrong.</p>
+        <button id="btn-retry" class="btn btn-primary">Try Again</button>
+      </div>
+    </section>
+
+    <!-- State: verdict -->
+    <section id="state-verdict" class="state hidden">
+      <div class="listing-summary">
+        <h2 id="v-title">Listing title</h2>
+        <p class="listing-meta">
+          <span id="v-category" class="chip"></span>
+          <span id="v-cached" class="chip chip-cache hidden">cached</span>
+        </p>
+      </div>
+
+      <div class="verdict-hero">
+        <svg class="score-ring" viewBox="0 0 120 120" width="110" height="110">
+          <circle class="ring-track" cx="60" cy="60" r="52" />
+          <circle id="ring-fill" class="ring-fill" cx="60" cy="60" r="52" />
+          <text id="ring-score" x="60" y="58" text-anchor="middle">–</text>
+          <text x="60" y="76" text-anchor="middle" class="ring-sub">/ 100</text>
+        </svg>
+        <div class="verdict-text">
+          <p id="v-verdict" class="verdict-label">—</p>
+          <p id="v-recommendation" class="recommendation-badge">—</p>
+          <p id="v-summary" class="verdict-summary"></p>
+        </div>
+      </div>
+
+      <div class="price-grid">
+        <div class="price-cell"><span class="price-label">Asking</span><span id="p-asking" class="price-value">—</span></div>
+        <div class="price-cell"><span class="price-label">Market range</span><span id="p-market" class="price-value">—</span></div>
+        <div class="price-cell"><span class="price-label">Retail new</span><span id="p-retail" class="price-value">—</span></div>
+        <div class="price-cell highlight"><span class="price-label">Suggested offer</span><span id="p-offer" class="price-value">—</span></div>
+      </div>
+      <p id="p-savings" class="savings-line"></p>
+
+      <div id="flags-red" class="flag-block hidden">
+        <h3>🚩 Red Flags</h3>
+        <ul id="list-red"></ul>
+      </div>
+      <div id="flags-green" class="flag-block hidden">
+        <h3>✅ Green Flags</h3>
+        <ul id="list-green"></ul>
+      </div>
+      <div id="tips-block" class="flag-block hidden">
+        <h3>💬 Negotiation Tips</h3>
+        <ul id="list-tips"></ul>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-save" class="btn btn-primary">💾 Save</button>
+        <button id="btn-watch" class="btn">👁️ Watchlist</button>
+        <button id="btn-reevaluate" class="btn btn-ghost" title="Re-run the evaluation (spends API credit)">↻</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ HISTORY TAB ============ -->
+  <main id="view-history" class="view">
+    <div class="list-controls">
+      <input id="history-search" type="search" placeholder="Search history…" />
+      <select id="history-filter"><option value="">All categories</option></select>
+    </div>
+    <ul id="history-list" class="card-list"></ul>
+    <p id="history-empty" class="list-empty hidden">No saved evaluations yet. Hit <strong>Save</strong> after evaluating a listing.</p>
+  </main>
+
+  <!-- ============ WATCHLIST TAB ============ -->
+  <main id="view-watchlist" class="view">
+    <ul id="watchlist-list" class="card-list"></ul>
+    <p id="watchlist-empty" class="list-empty hidden">Nothing on your watchlist. Add listings you want to keep an eye on.</p>
+  </main>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

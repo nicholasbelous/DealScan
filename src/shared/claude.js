@@ -93,7 +93,8 @@ function buildUserPrompt(listing) {
   // The parser hands us a clean object; serialize the fields Claude needs.
   const lines = [
     `Title: ${listing.title ?? "(unknown)"}`,
-    `Asking price: ${listing.price ?? "(unknown)"}`,
+    `Category: ${listing.category ?? "other"}`,
+    `Asking price: ${listing.priceRaw ?? listing.price ?? "(unknown)"}`,
     `Condition: ${listing.condition ?? "(not stated)"}`,
     `Location: ${listing.location ?? "(not stated)"}`,
     `Seller: ${listing.seller ?? "(not stated)"}`,

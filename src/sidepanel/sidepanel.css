@@ -1,0 +1,274 @@
+/* DealScan side panel — auto light/dark via prefers-color-scheme. */
+
+:root {
+  --bg: #ffffff;
+  --bg-card: #f5f6f7;
+  --bg-input: #ffffff;
+  --text: #1c1e21;
+  --muted: #65676b;
+  --border: #d8dadf;
+  --accent: #1a7f37;
+  --accent-hover: #1f9d45;
+  --error: #c43e3e;
+
+  /* Score band colors (used by scoreColor() in formatter.js) */
+  --great: #1a7f37;
+  --good: #5aa63c;
+  --fair: #d9a514;
+  --poor: #e07b39;
+  --avoid: #c43e3e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1e21;
+    --bg-card: #2a2d31;
+    --bg-input: #3a3d41;
+    --text: #e4e6eb;
+    --muted: #9aa0a6;
+    --border: #3e4145;
+    --accent: #2bb55a;
+    --accent-hover: #34cc67;
+    --error: #e06c6c;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ---------- Header & tabs ---------- */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px 0;
+}
+
+.logo { font-weight: 700; font-size: 16px; }
+
+.tabs { display: flex; gap: 4px; margin-top: 8px; }
+
+.tab {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---------- Views & states ---------- */
+
+.view { display: none; padding: 14px 12px 24px; }
+.view.active { display: block; }
+.hidden { display: none !important; }
+
+.empty-card {
+  text-align: center;
+  padding: 36px 18px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.empty-icon { font-size: 32px; margin-bottom: 10px; }
+.error-card #error-message { color: var(--error); margin-bottom: 14px; }
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 12px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Verdict ---------- */
+
+.listing-summary h2 { font-size: 15px; line-height: 1.3; }
+.listing-meta { margin-top: 6px; display: flex; gap: 6px; }
+
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--muted);
+}
+.chip-cache { background: #d9a51422; color: var(--fair); }
+
+.verdict-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.score-ring .ring-track { fill: none; stroke: var(--border); stroke-width: 10; }
+.score-ring .ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 327; /* 2πr, r=52 */
+  stroke-dashoffset: 327;
+  transform: rotate(-90deg);
+  transform-origin: 60px 60px;
+  transition: stroke-dashoffset 0.8s ease, stroke 0.3s ease;
+}
+.score-ring text { fill: var(--text); font-size: 30px; font-weight: 700; }
+.score-ring .ring-sub { font-size: 11px; fill: var(--muted); font-weight: 400; }
+
+.verdict-text { flex: 1; }
+.verdict-label { font-size: 19px; font-weight: 700; }
+
+.recommendation-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--bg-card);
+}
+
+.verdict-summary { margin-top: 8px; color: var(--muted); line-height: 1.4; font-size: 13px; }
+
+/* ---------- Price grid ---------- */
+
+.price-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.price-cell {
+  background: var(--bg-card);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.price-cell.highlight { outline: 2px solid var(--accent); }
+.price-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+.price-value { font-size: 16px; font-weight: 700; }
+
+.savings-line { margin: 10px 2px 0; font-weight: 600; }
+
+/* ---------- Flags & tips ---------- */
+
+.flag-block { margin-top: 16px; }
+.flag-block h3 { font-size: 13px; margin-bottom: 6px; }
+.flag-block ul { list-style: none; }
+.flag-block li {
+  padding: 7px 10px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  margin-bottom: 5px;
+  line-height: 1.4;
+  font-size: 13px;
+}
+
+/* ---------- Buttons ---------- */
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  padding: 10px 0;
+}
+
+.btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-ghost { flex: 0 0 44px; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+
+/* ---------- History & watchlist ---------- */
+
+.list-controls { display: flex; gap: 8px; margin-bottom: 12px; }
+
+.list-controls input,
+.list-controls select {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.card-list { list-style: none; }
+
+.card-list li {
+  background: var(--bg-card);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.card-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-title { font-weight: 600; font-size: 13px; line-height: 1.3; }
+.card-title a { color: var(--text); text-decoration: none; }
+.card-title a:hover { text-decoration: underline; }
+.card-sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+.card-score {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.card-actions { margin-top: 8px; display: flex; gap: 6px; }
+.card-actions button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.card-actions button:hover { color: var(--error); border-color: var(--error); }
+
+.list-empty { text-align: center; color: var(--muted); padding: 30px 16px; line-height: 1.5; }
