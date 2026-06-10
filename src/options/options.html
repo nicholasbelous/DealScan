@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DealScan — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>⚡ DealScan Settings</h1>
+      <p class="subtitle">Keys are stored locally in your browser and only ever sent to their own APIs.</p>
+    </header>
+
+    <section class="card">
+      <h2>API Keys</h2>
+
+      <label for="anthropic-key">Anthropic API key <span class="required">required</span></label>
+      <div class="key-row">
+        <input id="anthropic-key" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+        <button id="toggle-key" class="btn btn-small" type="button" title="Show/hide">👁️</button>
+      </div>
+      <p class="hint">Get one at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys. New accounts include $5 free credit.</p>
+
+      <label for="ebay-id">eBay App ID <span class="optional">optional</span></label>
+      <input id="ebay-id" type="text" placeholder="YourApp-..." autocomplete="off" spellcheck="false" />
+      <p class="hint">Adds real sold-listing prices. Without it, pricing uses Claude's web search only.</p>
+    </section>
+
+    <section class="card">
+      <h2>Evaluation</h2>
+      <label for="model">Claude model</label>
+      <select id="model">
+        <option value="claude-haiku-4-5">Haiku 4.5 — cheapest (~$0.005/eval)</option>
+        <option value="claude-sonnet-4-6">Sonnet 4.6 — balanced (default)</option>
+        <option value="claude-opus-4-8">Opus 4.8 — smartest (~10× cost)</option>
+      </select>
+      <p class="hint">Sonnet is the sweet spot for marketplace evaluations. Switch to Haiku to stretch free credit further.</p>
+    </section>
+
+    <section class="card">
+      <h2>Data</h2>
+      <div class="button-row">
+        <button id="btn-export" class="btn">⬇️ Export history as JSON</button>
+        <button id="btn-clear" class="btn btn-danger">🗑️ Clear history</button>
+      </div>
+      <p id="data-status" class="hint"></p>
+    </section>
+
+    <div class="save-row">
+      <button id="btn-save" class="btn btn-primary">Save Settings</button>
+      <span id="save-status" class="save-status"></span>
+    </div>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

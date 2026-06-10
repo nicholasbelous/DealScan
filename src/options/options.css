@@ -1,0 +1,119 @@
+/* DealScan options page — auto light/dark, mirrors the side panel palette. */
+
+:root {
+  --bg: #f0f2f5;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --text: #1c1e21;
+  --muted: #65676b;
+  --border: #d8dadf;
+  --accent: #1a7f37;
+  --accent-hover: #1f9d45;
+  --error: #c43e3e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18191a;
+    --bg-card: #242526;
+    --bg-input: #3a3d41;
+    --text: #e4e6eb;
+    --muted: #9aa0a6;
+    --border: #3e4145;
+    --accent: #2bb55a;
+    --accent-hover: #34cc67;
+    --error: #e06c6c;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.page { max-width: 560px; margin: 0 auto; padding: 32px 20px 60px; }
+
+header h1 { font-size: 22px; }
+.subtitle { color: var(--muted); margin-top: 6px; line-height: 1.4; }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.card h2 { font-size: 15px; margin-bottom: 14px; }
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  margin: 14px 0 6px;
+}
+
+label:first-of-type { margin-top: 0; }
+
+.required, .optional {
+  font-weight: 500;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+.required { background: #c43e3e22; color: var(--error); }
+.optional { background: var(--border); color: var(--muted); }
+
+input, select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+input:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+.key-row { display: flex; gap: 6px; }
+.key-row input { flex: 1; }
+
+.hint { color: var(--muted); font-size: 12px; margin-top: 6px; line-height: 1.45; }
+.hint a { color: var(--accent); }
+
+.btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover { border-color: var(--accent); }
+.btn-small { flex: 0 0 auto; padding: 0 12px; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-danger:hover { border-color: var(--error); color: var(--error); }
+
+.button-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.save-status { color: var(--accent); font-weight: 600; }
+.save-status.error { color: var(--error); }
