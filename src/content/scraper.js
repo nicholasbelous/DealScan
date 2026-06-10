@@ -9,6 +9,11 @@
 //   { type: "SCRAPE_LISTING" } → { ok, data: rawListing }
 
 (() => {
+  // Guard against double injection (the side panel re-injects on demand when
+  // a tab predates the extension load).
+  if (window.__dealscanScraper) return;
+  window.__dealscanScraper = true;
+
   const PRICE_RE = /(?:\$|£|€|CA\$|A\$)\s?[\d,]+(?:\.\d{2})?/;
 
   function scrapeListing() {

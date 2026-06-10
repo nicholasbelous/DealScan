@@ -9,6 +9,9 @@
 // Classic script (no ES modules in content scripts).
 
 (() => {
+  if (window.__dealscanObserver) return;
+  window.__dealscanObserver = true;
+
   let lastUrl = location.href;
 
   const observer = new MutationObserver(() => {

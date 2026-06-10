@@ -18,7 +18,7 @@
   ],
 
   "host_permissions": [
-    "https://www.facebook.com/marketplace/*",
+    "https://*.facebook.com/*",
     "https://api.anthropic.com/*",
     "https://api.ebay.com/*"
   ],
@@ -30,7 +30,7 @@
 
   "content_scripts": [
     {
-      "matches": ["https://www.facebook.com/marketplace/item/*"],
+      "matches": ["https://*.facebook.com/*"],
       "js": [
         "src/content/scraper.js",
         "src/content/injector.js",

@@ -147,11 +147,32 @@ async function getListingTab() {
   return active && LISTING_URL_RE.test(active.url ?? "") ? active : null;
 }
 
-function sendToTab(tabId, message) {
+async function sendToTab(tabId, message) {
+  try {
+    return await sendMessageOnce(tabId, message);
+  } catch (err) {
+    if (!err.noReceiver) throw err;
+    // Content scripts aren't in this tab (tab predates the extension load, or
+    // FB SPA-navigated from a non-matching page). Inject them and retry.
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: [
+        "src/content/scraper.js",
+        "src/content/injector.js",
+        "src/content/observer.js",
+      ],
+    });
+    return sendMessageOnce(tabId, message);
+  }
+}
+
+function sendMessageOnce(tabId, message) {
   return new Promise((resolve, reject) => {
     chrome.tabs.sendMessage(tabId, message, (res) => {
       if (chrome.runtime.lastError) {
-        reject(new Error("Couldn't reach the page — try refreshing the listing tab."));
+        const err = new Error("Couldn't reach the page — try refreshing the listing tab.");
+        err.noReceiver = true;
+        reject(err);
       } else if (!res?.ok) {
         reject(new Error(res?.error ?? "Scrape failed"));
       } else {

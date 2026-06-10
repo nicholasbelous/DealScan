@@ -5,6 +5,9 @@
 // Classic script (no ES modules in content scripts).
 
 (() => {
+  if (window.__dealscanInjector) return;
+  window.__dealscanInjector = true;
+
   const BUTTON_ID = "dealscan-evaluate-btn";
 
   function injectButton() {
