@@ -37,6 +37,13 @@
         <option value="claude-opus-4-8">Opus 4.8 — smartest (~15¢+/eval)</option>
       </select>
       <p class="hint">Haiku handles price lookups well. Use Sonnet for trickier categories like vehicles.</p>
+
+      <label class="checkbox-row" for="web-search">
+        <input id="web-search" type="checkbox" />
+        <span>Use live web search <span class="optional">~10× cost</span></span>
+      </label>
+      <p class="hint">Off: Claude estimates prices from its built-in knowledge (~½¢ per scan — recommended).
+        On: Claude searches the web for current prices (~3–8¢ per scan — use for big purchases like vehicles).</p>
     </section>
 
     <section class="card">

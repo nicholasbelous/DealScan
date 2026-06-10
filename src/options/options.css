@@ -86,6 +86,14 @@ input:focus, select:focus { outline: 2px solid var(--accent); border-color: tran
 .key-row { display: flex; gap: 6px; }
 .key-row input { flex: 1; }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.checkbox-row input { width: auto; }
+
 .hint { color: var(--muted); font-size: 12px; margin-top: 6px; line-height: 1.45; }
 .hint a { color: var(--accent); }
 

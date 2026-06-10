@@ -50,13 +50,24 @@ const VERDICT_SCHEMA = `{
   "summary": string                      // one or two sentence headline
 }`;
 
-const SYSTEM_PROMPT = `You are DealScan, an expert at evaluating Facebook Marketplace listings.
+const PROMPT_INTRO = `You are DealScan, an expert at evaluating Facebook Marketplace listings.
 
-You receive a scraped listing (title, price, condition, description, seller info).
+You receive a scraped listing (title, price, condition, description, seller info).`;
+
+// Cheap default: price from Claude's own knowledge, zero searches.
+const PRICING_FROM_KNOWLEDGE = `
+Estimate the item's current used-market price range from your knowledge of
+resale values, brand tiers, depreciation, and typical marketplace pricing.
+Used-goods prices move slowly — your knowledge is sufficient. Be honest about
+uncertainty by widening marketLow/marketHigh for items you know less well.`;
+
+// Opt-in accurate mode: one targeted web search.
+const PRICING_FROM_SEARCH = `
 Run ONE targeted web search to find the item's current market price (e.g.
 "<item> used price"). Only search a second time if the first result is truly
-unusable. Searches are expensive — never browse exploratively.
+unusable. Searches are expensive — never browse exploratively.`;
 
+const PROMPT_RULES = `
 Then return your evaluation as a SINGLE JSON object matching this exact shape,
 with no prose before or after it:
 
@@ -76,7 +87,7 @@ Scoring guidance:
  * @returns {Promise<object>} parsed verdict matching VERDICT_SCHEMA.
  */
 export async function evaluateListing(listing) {
-  const { anthropicKey, model } = await getSettings();
+  const { anthropicKey, model, useWebSearch } = await getSettings();
   if (!anthropicKey) {
     throw new Error("No Anthropic API key set. Add one in the extension Options.");
   }
@@ -85,14 +96,16 @@ export async function evaluateListing(listing) {
     { role: "user", content: buildUserPrompt(listing) },
   ];
 
-  // Web search runs a server-side loop; if it pauses (stop_reason
-  // "pause_turn") we re-send to let it continue. Each continuation re-bills
-  // the whole conversation (cache softens this) — keep the cap tight.
-  let response = await callMessages({ apiKey: anthropicKey, model, messages });
+  const opts = { apiKey: anthropicKey, model, useWebSearch };
+  let response = await callMessages({ ...opts, messages });
 
-  for (let i = 0; i < 2 && response.stop_reason === "pause_turn"; i++) {
-    messages.push({ role: "assistant", content: response.content });
-    response = await callMessages({ apiKey: anthropicKey, model, messages });
+  // Only web search produces server-side pause_turn continuations. Each one
+  // re-bills the whole conversation (cache softens this) — keep the cap tight.
+  if (useWebSearch) {
+    for (let i = 0; i < 2 && response.stop_reason === "pause_turn"; i++) {
+      messages.push({ role: "assistant", content: response.content });
+      response = await callMessages({ ...opts, messages });
+    }
   }
 
   return parseVerdict(response);
@@ -119,22 +132,27 @@ function buildUserPrompt(listing) {
   return lines.join("\n");
 }
 
-async function callMessages({ apiKey, model, messages }) {
+async function callMessages({ apiKey, model, messages, useWebSearch }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   const resolvedModel = model || DEFAULT_MODEL;
   const body = {
     model: resolvedModel,
-    max_tokens: 2048,
-    // Auto-cache the conversation prefix: search-result tokens re-sent on
-    // continuation rounds are read from cache (~0.1x price) instead of
-    // being re-billed in full. This is the main cost control.
-    cache_control: { type: "ephemeral" },
-    system: SYSTEM_PROMPT,
-    tools: [WEB_SEARCH_TOOL],
+    max_tokens: 1500,
+    system:
+      PROMPT_INTRO +
+      (useWebSearch ? PRICING_FROM_SEARCH : PRICING_FROM_KNOWLEDGE) +
+      PROMPT_RULES,
     messages,
   };
+  if (useWebSearch) {
+    body.tools = [WEB_SEARCH_TOOL];
+    // Auto-cache the conversation prefix so search-result tokens re-sent on
+    // continuation rounds are read from cache (~0.1x price) instead of being
+    // re-billed in full.
+    body.cache_control = { type: "ephemeral" };
+  }
   // Sonnet 4.6 defaults to effort "high" — slower and pricier than this
   // workload needs. (Haiku doesn't accept the param at all.)
   if (EFFORT_MODELS.test(resolvedModel)) {
