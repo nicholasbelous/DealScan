@@ -20,7 +20,11 @@ const API_VERSION = "2023-06-01";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 // Server-side web search tool — lets Claude look up real market prices.
-const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 5 };
+// max_uses kept low: each search round adds a full network round trip.
+const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 3 };
+
+// Hard cap per API request so a stuck call fails loudly instead of spinning.
+const REQUEST_TIMEOUT_MS = 90_000;
 
 // JSON shape we ask Claude to return. Kept in one place so the prompt and the
 // parser/renderer stay in sync.
@@ -109,23 +113,40 @@ function buildUserPrompt(listing) {
 }
 
 async function callMessages({ apiKey, model, messages }) {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": API_VERSION,
-      // Required for calls made directly from a browser/extension context.
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: model || DEFAULT_MODEL,
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      tools: [WEB_SEARCH_TOOL],
-      messages,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": API_VERSION,
+        // Required for calls made directly from a browser/extension context.
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_MODEL,
+        max_tokens: 2048,
+        // Sonnet 4.6 defaults to effort "high" — slower and pricier than this
+        // workload needs. Medium keeps quality with much better latency.
+        output_config: { effort: "medium" },
+        system: SYSTEM_PROMPT,
+        tools: [WEB_SEARCH_TOOL],
+        messages,
+      }),
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("Evaluation timed out after 90s — try again.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
