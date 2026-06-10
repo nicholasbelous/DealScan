@@ -44,52 +44,74 @@
   }
 
   // --- Strategy 1: embedded JSON ----------------------------------------------
+  // FB ships listing data in <script type="application/json"> blobs. A blob can
+  // contain MANY listings (search results, "more like this"), so regex-grabbing
+  // the first matching field is wrong. Parse properly and walk the tree to the
+  // single object whose id matches the item in the URL; read only its fields.
 
   function scrapeEmbeddedJson(itemId) {
     if (!itemId) return null;
-    for (const script of document.querySelectorAll("script")) {
+    for (const script of document.querySelectorAll('script[type="application/json"]')) {
       const text = script.textContent;
-      // Must be marketplace listing data AND belong to THIS item — stale blobs
-      // from previously viewed listings stay in the DOM after SPA navigation.
-      if (!text || !text.includes("marketplace_listing_title") || !text.includes(itemId)) {
+      if (!text || !text.includes(itemId) || !text.includes("marketplace_listing_title")) {
         continue;
       }
-      const title = jsonStringField(text, "marketplace_listing_title");
-      if (!title) continue;
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        continue;
+      }
+      const node = findListingNode(data, itemId);
+      if (!node) continue;
 
       return {
-        title,
-        price: jsonStringField(text, "formatted_amount"),
-        description: jsonNestedText(text, "redacted_description"),
-        location: jsonNestedText(text, "location_text") ?? jsonCityState(text),
+        title: node.marketplace_listing_title ?? node.custom_title ?? null,
+        price: extractPrice(node.listing_price),
+        description: node.redacted_description?.text ?? null,
+        location:
+          node.location_text?.text ??
+          cityState(node.location?.reverse_geocode ?? node.location_vanity_or_id) ??
+          null,
       };
     }
     return null;
   }
 
-  // '"key":"value"' → unescaped value.
-  function jsonStringField(text, key) {
-    const m = text.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`));
-    return m ? safeJsonString(m[1]) : null;
-  }
-
-  // '"key":{"text":"value"...' → unescaped value.
-  function jsonNestedText(text, key) {
-    const m = text.match(new RegExp(`"${key}"\\s*:\\s*\\{"text"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`));
-    return m ? safeJsonString(m[1]) : null;
-  }
-
-  function jsonCityState(text) {
-    const m = text.match(/"city"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"state"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    return m ? `${safeJsonString(m[1])}, ${safeJsonString(m[2])}` : null;
-  }
-
-  function safeJsonString(escaped) {
-    try {
-      return JSON.parse(`"${escaped}"`);
-    } catch {
-      return escaped;
+  // Depth-first search for the listing object: it carries the matching id AND
+  // listing fields (other objects share the id, e.g. tracking refs).
+  function findListingNode(root, itemId) {
+    const stack = [root];
+    let steps = 0;
+    while (stack.length > 0 && steps < 200000) {
+      const node = stack.pop();
+      steps += 1;
+      if (!node || typeof node !== "object") continue;
+      if (
+        node.id === itemId &&
+        (node.marketplace_listing_title != null || node.listing_price != null)
+      ) {
+        return node;
+      }
+      for (const value of Object.values(node)) {
+        if (value && typeof value === "object") stack.push(value);
+      }
     }
+    return null;
+  }
+
+  function extractPrice(listingPrice) {
+    if (!listingPrice || typeof listingPrice !== "object") return null;
+    if (listingPrice.formatted_amount) return listingPrice.formatted_amount;
+    if (listingPrice.amount != null) return `$${listingPrice.amount}`;
+    return null;
+  }
+
+  function cityState(geo) {
+    if (!geo || typeof geo !== "object") return null;
+    if (geo.city && geo.state) return `${geo.city}, ${geo.state}`;
+    if (geo.city_page?.display_name) return geo.city_page.display_name;
+    return null;
   }
 
   // --- Strategy 2: DOM fallbacks ------------------------------------------------

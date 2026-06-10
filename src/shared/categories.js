@@ -43,6 +43,18 @@ const CATEGORY_KEYWORDS = {
   ],
 };
 
+// Whole-word regex per keyword, compiled once. Substring matching is wrong:
+// "cart" must not match the keyword "car", "skis" must not match "ski" being
+// inside "whiskey", etc.
+const CATEGORY_MATCHERS = Object.fromEntries(
+  Object.entries(CATEGORY_KEYWORDS).map(([category, keywords]) => [
+    category,
+    keywords.map(
+      (kw) => new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
+    ),
+  ])
+);
+
 /**
  * Detect a listing's category from its text.
  * @param {string} text - title + description, any case.
@@ -50,12 +62,11 @@ const CATEGORY_KEYWORDS = {
  */
 export function detectCategory(text) {
   if (!text) return "other";
-  const haystack = text.toLowerCase();
 
   let bestCategory = "other";
   let bestHits = 0;
-  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    const hits = keywords.filter((kw) => haystack.includes(kw)).length;
+  for (const [category, matchers] of Object.entries(CATEGORY_MATCHERS)) {
+    const hits = matchers.filter((re) => re.test(text)).length;
     if (hits > bestHits) {
       bestHits = hits;
       bestCategory = category;
