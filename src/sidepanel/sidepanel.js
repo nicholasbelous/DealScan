@@ -1,9 +1,9 @@
 // DealScan side panel — the primary UI.
 //
 // Flow: find the active Marketplace listing tab → ask its content script to
-// scrape → normalize via parser → send to the service worker for the Claude
-// evaluation (cached per URL) → render the verdict. The observer content
-// script pings us when Facebook SPA-navigates so we re-run automatically.
+// scrape → normalize via parser. If the scrape isn't reliable, REFUSE here
+// (show a notice, spend nothing). Otherwise hand off to the service worker,
+// which fetches photos and runs the Claude evaluation, then render the verdict.
 
 import { parseListing } from "../shared/parser.js";
 import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
@@ -24,11 +24,11 @@ import {
 } from "../shared/storage.js";
 
 const LISTING_URL_RE = /facebook\.com\/marketplace\/item\//;
-const RING_CIRCUMFERENCE = 327; // matches stroke-dasharray in the CSS
+const RING_CIRCUMFERENCE = 327; // 2πr, r=52 — matches the CSS dasharray
 
 const $ = (id) => document.getElementById(id);
 
-// Current evaluation context — what Save / Watchlist buttons act on.
+// What the Save / Watchlist buttons act on.
 let current = { listing: null, verdict: null };
 
 // ---------- Boot ----------------------------------------------------------------
@@ -45,8 +45,7 @@ let navDebounce = null;
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type !== "LISTING_CHANGED") return;
   clearTimeout(navDebounce);
-  // Give Facebook's DOM a moment to settle before scraping the new listing.
-  navDebounce = setTimeout(evaluateActiveTab, 1200);
+  navDebounce = setTimeout(() => evaluateActiveTab(), 1200);
 });
 
 // ---------- Tabs -----------------------------------------------------------------
@@ -66,6 +65,7 @@ function bindTabs() {
 
 function bindActions() {
   $("btn-retry").addEventListener("click", () => evaluateActiveTab());
+  $("btn-reload").addEventListener("click", () => evaluateActiveTab());
   $("btn-reevaluate").addEventListener("click", () => evaluateActiveTab({ force: true }));
 
   $("btn-save").addEventListener("click", async () => {
@@ -125,7 +125,13 @@ async function evaluateActiveTab({ force = false } = {}) {
     const listing = parseListing(raw);
     current = { listing, verdict: null };
 
-    showState("loading", `Evaluating "${truncate(listing.title, 40)}"…`);
+    // The reliability gate. Refuse rather than evaluate possibly-wrong data.
+    if (!listing.reliable) {
+      showState("unreliable");
+      return;
+    }
+
+    showState("loading", `Evaluating "${truncate(listing.title, 38)}"…`);
     const res = await chrome.runtime.sendMessage({
       type: "EVALUATE_LISTING",
       payload: listing,
@@ -152,8 +158,8 @@ async function sendToTab(tabId, message) {
     return await sendMessageOnce(tabId, message);
   } catch (err) {
     if (!err.noReceiver) throw err;
-    // Content scripts aren't in this tab (tab predates the extension load, or
-    // FB SPA-navigated from a non-matching page). Inject them and retry.
+    // Content scripts not present (tab predates the extension load). Inject
+    // and retry.
     await chrome.scripting.executeScript({
       target: { tabId },
       files: [
@@ -183,7 +189,7 @@ function sendMessageOnce(tabId, message) {
 }
 
 function showState(name, loadingLabel) {
-  ["idle", "loading", "error", "verdict"].forEach((s) =>
+  ["idle", "loading", "unreliable", "error", "verdict"].forEach((s) =>
     $(`state-${s}`).classList.toggle("hidden", s !== name)
   );
   if (loadingLabel) $("loading-label").textContent = loadingLabel;
@@ -194,12 +200,16 @@ function showState(name, loadingLabel) {
 function renderVerdict(listing, v) {
   $("v-title").textContent = listing.title;
   $("v-category").textContent = categoryLabel(listing.category);
+
+  const photos = v.imagesAnalyzed ?? 0;
+  $("v-photos").textContent = photos > 0 ? `👁️ ${photos} photo${photos === 1 ? "" : "s"}` : "";
+  $("v-photos").classList.toggle("hidden", photos === 0);
   $("v-cached").classList.toggle("hidden", !v.fromCache);
 
   // Score ring
   const score = clampScore(v.score);
-  const ring = $("ring-fill");
   const color = scoreColor(score);
+  const ring = $("ring-fill");
   ring.style.stroke = color;
   ring.style.strokeDashoffset =
     score == null ? RING_CIRCUMFERENCE : RING_CIRCUMFERENCE * (1 - score / 100);
@@ -217,42 +227,23 @@ function renderVerdict(listing, v) {
     v.marketLow != null && v.marketHigh != null
       ? `${formatMoney(v.marketLow, cur)}–${formatMoney(v.marketHigh, cur)}`
       : "—";
-  $("p-retail").textContent = formatMoney(v.retailNew, cur);
   $("p-offer").textContent = formatMoney(v.suggestedOffer, cur);
 
   const savings = v.savingsPercent;
+  const savingsEl = $("p-savings");
   if (savings != null && Number.isFinite(Number(savings))) {
     const below = Number(savings) >= 0;
-    $("p-savings").textContent = `${formatPercent(Math.abs(savings)).replace("+", "")} ${
-      below ? "below" : "above"
-    } market value`;
-    $("p-savings").style.color = below ? "var(--great)" : "var(--avoid)";
+    savingsEl.textContent = `${formatPercent(Math.abs(savings)).replace("+", "")} ${below ? "below" : "above"}`;
+    savingsEl.style.color = below ? "var(--great)" : "var(--avoid)";
   } else {
-    $("p-savings").textContent = "";
+    savingsEl.textContent = "—";
+    savingsEl.style.color = "";
   }
-
-  renderFlagList("flags-red", "list-red", v.redFlags);
-  renderFlagList("flags-green", "list-green", v.greenFlags);
-  renderFlagList("tips-block", "list-tips", v.negotiationTips);
 }
 
 function clampScore(score) {
   const n = Number(score);
   return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null;
-}
-
-function renderFlagList(blockId, listId, items) {
-  const block = $(blockId);
-  const list = $(listId);
-  list.replaceChildren();
-  const has = Array.isArray(items) && items.length > 0;
-  block.classList.toggle("hidden", !has);
-  if (!has) return;
-  for (const item of items) {
-    const li = document.createElement("li");
-    li.textContent = item;
-    list.appendChild(li);
-  }
 }
 
 // ---------- History tab ---------------------------------------------------------------

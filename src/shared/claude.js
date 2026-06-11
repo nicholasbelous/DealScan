@@ -4,103 +4,83 @@
 // scripts or the page. The API key lives in chrome.storage.local and is read
 // here at call time; it never touches the page context.
 //
-// This talks to the Anthropic Messages API over plain fetch (no SDK — this is
-// a vanilla MV3 extension). Web search is enabled so Claude can pull real
-// market pricing for the listing. The model returns a structured JSON verdict
-// that the side panel renders.
+// Plain fetch (no SDK — vanilla MV3 extension). Two cost-controlled modes:
+//   - default: Claude estimates market price from its own knowledge (cheap)
+//   - opt-in:  one web search for current prices (Options → Use web search)
+// Listing photos (2-3) are sent as images so Claude can judge condition and
+// catch stock-photo scams. Output is trimmed to bare essentials to keep both
+// tokens and the UI lean.
 
 import { getSettings } from "./storage.js";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
 
-// Default model. Override per-user via the Options page (stored in settings).
-// Haiku by default: web search results dominate token cost regardless of
-// model, and Haiku's input price is 1/3 of Sonnet's for near-equal quality on
-// this lookup-and-score workload.
 const DEFAULT_MODEL = "claude-haiku-4-5";
-
-// Only these models accept output_config.effort; sending it to Haiku errors.
-const EFFORT_MODELS = /sonnet-4-6|opus-4/;
-
-// Server-side web search tool — lets Claude look up real market prices.
-// max_uses is the single biggest cost lever: every search injects thousands
-// of result tokens that get re-billed on each subsequent round.
+const EFFORT_MODELS = /sonnet-4-6|opus-4/; // only these accept output_config.effort
 const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search", max_uses: 2 };
-
-// Hard cap per API request so a stuck call fails loudly instead of spinning.
 const REQUEST_TIMEOUT_MS = 90_000;
 
-// JSON shape we ask Claude to return. Kept in one place so the prompt and the
-// parser/renderer stay in sync.
+// Bare-essentials verdict — score, verdict, prices, suggested offer, summary.
+// No flag lists (deliberately trimmed for a clean panel + cheaper output).
 const VERDICT_SCHEMA = `{
-  "score": number,                       // 0-100 deal score
-  "verdict": string,                     // "Great Deal" | "Good Deal" | "Fair" | "Overpriced" | "Avoid"
-  "recommendation": string,              // "Buy" | "Negotiate" | "Pass"
+  "score": number,            // 0-100 deal score
+  "verdict": string,          // "Great Deal" | "Good Deal" | "Fair" | "Overpriced" | "Avoid"
+  "recommendation": string,   // "Buy" | "Negotiate" | "Pass"
   "askingPrice": number,
-  "marketLow": number,                   // low end of used market range
-  "marketHigh": number,                  // high end of used market range
-  "retailNew": number,                   // approx price new, or null
-  "suggestedOffer": number,              // what the buyer should offer
-  "savingsPercent": number,              // % below (positive) or above (negative) market
-  "demand": string,                      // "high" | "medium" | "low"
-  "redFlags": string[],
-  "greenFlags": string[],
-  "negotiationTips": string[],
-  "summary": string                      // one or two sentence headline
+  "marketLow": number,        // low end of used market range
+  "marketHigh": number,       // high end of used market range
+  "suggestedOffer": number,   // what the buyer should offer
+  "savingsPercent": number,   // % below (positive) / above (negative) market
+  "summary": string           // ONE concise sentence; mention any deal-breaker
 }`;
 
 const PROMPT_INTRO = `You are DealScan, an expert at evaluating Facebook Marketplace listings.
 
-You receive a scraped listing (title, price, condition, description, seller info).`;
+You receive a scraped listing (title, price, condition, description) and its
+actual photos. Use the photos to judge real condition and to catch stock /
+catalog images (a strong scam signal). If the photos clearly don't match the
+title, say so in the summary and lower the score.`;
 
-// Cheap default: price from Claude's own knowledge, zero searches.
 const PRICING_FROM_KNOWLEDGE = `
 Estimate the item's current used-market price range from your knowledge of
-resale values, brand tiers, depreciation, and typical marketplace pricing.
-Used-goods prices move slowly — your knowledge is sufficient. Be honest about
-uncertainty by widening marketLow/marketHigh for items you know less well.`;
+resale values, brand tiers, and depreciation. Used-goods prices move slowly —
+your knowledge is sufficient. Widen marketLow/marketHigh when less certain.`;
 
-// Opt-in accurate mode: one targeted web search.
 const PRICING_FROM_SEARCH = `
-Run ONE targeted web search to find the item's current market price (e.g.
-"<item> used price"). Only search a second time if the first result is truly
-unusable. Searches are expensive — never browse exploratively.`;
+Run ONE targeted web search for the item's current used price (e.g. "<item>
+used price"). Only search again if the first result is unusable. Searches are
+expensive — never browse exploratively.`;
 
 const PROMPT_RULES = `
-Then return your evaluation as a SINGLE JSON object matching this exact shape,
-with no prose before or after it:
+Return your evaluation as a SINGLE JSON object matching this exact shape, with
+no prose before or after it:
 
 ${VERDICT_SCHEMA}
 
-Scoring guidance:
-- 85-100 Great Deal, 70-84 Good Deal, 50-69 Fair, 30-49 Overpriced, 0-29 Avoid.
-- Weigh asking price against the used market range, condition, and demand.
-- redFlags: scam signals, stock photos, vague descriptions, suspiciously low prices.
-- greenFlags: original packaging, receipts, motivated seller, detailed description.
-- Category-aware: cars -> mileage/year; electronics -> model generation; furniture -> brand tier.
-- Return numbers as plain numbers (no "$" or commas). Use null for unknown numeric fields.`;
+Scoring: 85-100 Great Deal, 70-84 Good Deal, 50-69 Fair, 30-49 Overpriced,
+0-29 Avoid. Weigh asking price vs the used market range and the condition you
+see in the photos. Keep "summary" to one sentence. Return numbers plain (no
+"$" or commas); use null for genuinely unknown numeric fields.`;
 
 /**
- * Evaluate a scraped listing. Returns the parsed verdict object.
- * @param {object} listing - normalized listing from the parser.
+ * Evaluate a scraped listing.
+ * @param {object} listing - normalized, reliable listing from the parser.
+ * @param {Array<{media_type:string,data:string}>} [images] - base64 photos.
  * @returns {Promise<object>} parsed verdict matching VERDICT_SCHEMA.
  */
-export async function evaluateListing(listing) {
+export async function evaluateListing(listing, images = []) {
   const { anthropicKey, model, useWebSearch } = await getSettings();
   if (!anthropicKey) {
     throw new Error("No Anthropic API key set. Add one in the extension Options.");
   }
 
-  const messages = [
-    { role: "user", content: buildUserPrompt(listing) },
-  ];
-
+  const messages = [{ role: "user", content: buildUserContent(listing, images) }];
   const opts = { apiKey: anthropicKey, model, useWebSearch };
+
   let response = await callMessages({ ...opts, messages });
 
-  // Only web search produces server-side pause_turn continuations. Each one
-  // re-bills the whole conversation (cache softens this) — keep the cap tight.
+  // Only web search produces server-side pause_turn continuations.
   if (useWebSearch) {
     for (let i = 0; i < 2 && response.stop_reason === "pause_turn"; i++) {
       messages.push({ role: "assistant", content: response.content });
@@ -113,22 +93,36 @@ export async function evaluateListing(listing) {
 
 // --- Internals ---------------------------------------------------------------
 
-function buildUserPrompt(listing) {
-  // The parser hands us a clean object; serialize the fields Claude needs.
+function buildUserContent(listing, images) {
+  const content = [];
+
+  // Images first so Claude grounds its read of the text in what it sees.
+  for (const img of images) {
+    content.push({
+      type: "image",
+      source: { type: "base64", media_type: img.media_type, data: img.data },
+    });
+  }
+
+  content.push({ type: "text", text: buildListingText(listing, images.length) });
+  return content;
+}
+
+function buildListingText(listing, imageCount) {
   const lines = [
     `Title: ${listing.title ?? "(unknown)"}`,
     `Category: ${listing.category ?? "other"}`,
     `Asking price: ${listing.priceRaw ?? listing.price ?? "(unknown)"}`,
-    `Condition: ${listing.condition ?? "(not stated)"}`,
+    `Condition (seller-stated): ${listing.condition ?? "(not stated)"}`,
     `Location: ${listing.location ?? "(not stated)"}`,
-    `Seller: ${listing.seller ?? "(not stated)"}`,
     "",
     "Description:",
     (listing.description ?? "(none)").slice(0, 1500),
+    "",
+    imageCount > 0
+      ? `${imageCount} listing photo(s) are attached above.`
+      : "No photos were available for this listing.",
   ];
-  if (listing.images?.length) {
-    lines.push("", `Image count: ${listing.images.length}`);
-  }
   return lines.join("\n");
 }
 
@@ -139,7 +133,7 @@ async function callMessages({ apiKey, model, messages, useWebSearch }) {
   const resolvedModel = model || DEFAULT_MODEL;
   const body = {
     model: resolvedModel,
-    max_tokens: 1500,
+    max_tokens: 700,
     system:
       PROMPT_INTRO +
       (useWebSearch ? PRICING_FROM_SEARCH : PRICING_FROM_KNOWLEDGE) +
@@ -148,13 +142,8 @@ async function callMessages({ apiKey, model, messages, useWebSearch }) {
   };
   if (useWebSearch) {
     body.tools = [WEB_SEARCH_TOOL];
-    // Auto-cache the conversation prefix so search-result tokens re-sent on
-    // continuation rounds are read from cache (~0.1x price) instead of being
-    // re-billed in full.
     body.cache_control = { type: "ephemeral" };
   }
-  // Sonnet 4.6 defaults to effort "high" — slower and pricier than this
-  // workload needs. (Haiku doesn't accept the param at all.)
   if (EFFORT_MODELS.test(resolvedModel)) {
     body.output_config = { effort: "medium" };
   }
@@ -168,7 +157,6 @@ async function callMessages({ apiKey, model, messages, useWebSearch }) {
         "content-type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": API_VERSION,
-        // Required for calls made directly from a browser/extension context.
         "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify(body),
@@ -183,15 +171,22 @@ async function callMessages({ apiKey, model, messages, useWebSearch }) {
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Anthropic API ${res.status}: ${body || res.statusText}`);
+    const text = await res.text().catch(() => "");
+    throw new Error(`Anthropic API ${res.status}: ${friendlyApiError(res.status, text)}`);
   }
   return res.json();
 }
 
+function friendlyApiError(status, body) {
+  if (status === 401) return "invalid API key — check it in Options.";
+  if (status === 429) return "rate limited — wait a moment and retry.";
+  if (status === 400 && /credit balance/i.test(body)) {
+    return "out of API credit — top up at console.anthropic.com.";
+  }
+  return body || "request failed.";
+}
+
 function parseVerdict(response) {
-  // Pull the text blocks (web search adds non-text blocks we ignore) and
-  // extract the JSON object Claude returned.
   const text = (response.content || [])
     .filter((b) => b.type === "text")
     .map((b) => b.text)

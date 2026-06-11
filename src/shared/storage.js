@@ -18,6 +18,9 @@ const DEFAULT_SETTINGS = {
   // Web search adds ~10x cost per evaluation (flat per-search fee + thousands
   // of result tokens). Off by default; opt in via Options for big purchases.
   useWebSearch: false,
+  // Send 2-3 listing photos to Claude for condition + stock-photo detection.
+  // Small cost bump (~0.3-0.5c/scan); on by default per user preference.
+  analyzeImages: true,
 };
 
 // --- Settings ----------------------------------------------------------------

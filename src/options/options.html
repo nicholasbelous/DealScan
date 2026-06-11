@@ -38,11 +38,18 @@
       </select>
       <p class="hint">Haiku handles price lookups well. Use Sonnet for trickier categories like vehicles.</p>
 
+      <label class="checkbox-row" for="analyze-images">
+        <input id="analyze-images" type="checkbox" />
+        <span>Analyze listing photos</span>
+      </label>
+      <p class="hint">On: Claude looks at the first 2–3 photos to judge condition and spot stock-photo scams
+        (~½–¾¢ per scan — recommended). Off: text only, cheapest.</p>
+
       <label class="checkbox-row" for="web-search">
         <input id="web-search" type="checkbox" />
         <span>Use live web search <span class="optional">~10× cost</span></span>
       </label>
-      <p class="hint">Off: Claude estimates prices from its built-in knowledge (~½¢ per scan — recommended).
+      <p class="hint">Off: Claude estimates prices from its built-in knowledge (recommended).
         On: Claude searches the web for current prices (~3–8¢ per scan — use for big purchases like vehicles).</p>
     </section>
 

@@ -19,6 +19,7 @@
 
   "host_permissions": [
     "https://*.facebook.com/*",
+    "https://*.fbcdn.net/*",
     "https://api.anthropic.com/*",
     "https://api.ebay.com/*"
   ],

@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("anthropic-key").value = settings.anthropicKey;
   $("ebay-id").value = settings.ebayAppId;
   $("model").value = settings.model;
+  $("analyze-images").checked = settings.analyzeImages === true;
   $("web-search").checked = settings.useWebSearch === true;
 
   $("btn-save").addEventListener("click", save);
@@ -33,6 +34,7 @@ async function save() {
     anthropicKey: key,
     ebayAppId: $("ebay-id").value.trim(),
     model: $("model").value,
+    analyzeImages: $("analyze-images").checked,
     useWebSearch: $("web-search").checked,
   });
 

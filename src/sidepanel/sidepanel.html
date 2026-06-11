@@ -24,7 +24,7 @@
       <div class="empty-card">
         <p class="empty-icon">🛍️</p>
         <p>Open a Facebook Marketplace listing, then click the
-          <strong>⚡ Evaluate Deal</strong> button on the page or re-open this panel.</p>
+          <strong>⚡ Evaluate Deal</strong> button on the page.</p>
       </div>
     </section>
 
@@ -33,6 +33,16 @@
       <div class="empty-card">
         <div class="spinner"></div>
         <p id="loading-label">Reading listing…</p>
+      </div>
+    </section>
+
+    <!-- State: couldn't read listing reliably (refuse, no spend) -->
+    <section id="state-unreliable" class="state hidden">
+      <div class="empty-card">
+        <p class="empty-icon">🔍</p>
+        <p>Couldn't read this listing reliably, so DealScan didn't evaluate it
+          (no charge). Refresh the listing and try again.</p>
+        <button id="btn-reload" class="btn btn-primary">Try Again</button>
       </div>
     </section>
 
@@ -45,12 +55,13 @@
       </div>
     </section>
 
-    <!-- State: verdict -->
+    <!-- State: verdict (bare essentials) -->
     <section id="state-verdict" class="state hidden">
       <div class="listing-summary">
         <h2 id="v-title">Listing title</h2>
         <p class="listing-meta">
           <span id="v-category" class="chip"></span>
+          <span id="v-photos" class="chip hidden"></span>
           <span id="v-cached" class="chip chip-cache hidden">cached</span>
         </p>
       </div>
@@ -65,35 +76,22 @@
         <div class="verdict-text">
           <p id="v-verdict" class="verdict-label">—</p>
           <p id="v-recommendation" class="recommendation-badge">—</p>
-          <p id="v-summary" class="verdict-summary"></p>
         </div>
       </div>
+
+      <p id="v-summary" class="verdict-summary"></p>
 
       <div class="price-grid">
         <div class="price-cell"><span class="price-label">Asking</span><span id="p-asking" class="price-value">—</span></div>
         <div class="price-cell"><span class="price-label">Market range</span><span id="p-market" class="price-value">—</span></div>
-        <div class="price-cell"><span class="price-label">Retail new</span><span id="p-retail" class="price-value">—</span></div>
         <div class="price-cell highlight"><span class="price-label">Suggested offer</span><span id="p-offer" class="price-value">—</span></div>
-      </div>
-      <p id="p-savings" class="savings-line"></p>
-
-      <div id="flags-red" class="flag-block hidden">
-        <h3>🚩 Red Flags</h3>
-        <ul id="list-red"></ul>
-      </div>
-      <div id="flags-green" class="flag-block hidden">
-        <h3>✅ Green Flags</h3>
-        <ul id="list-green"></ul>
-      </div>
-      <div id="tips-block" class="flag-block hidden">
-        <h3>💬 Negotiation Tips</h3>
-        <ul id="list-tips"></ul>
+        <div class="price-cell"><span class="price-label">vs market</span><span id="p-savings" class="price-value">—</span></div>
       </div>
 
       <div class="action-row">
         <button id="btn-save" class="btn btn-primary">💾 Save</button>
         <button id="btn-watch" class="btn">👁️ Watchlist</button>
-        <button id="btn-reevaluate" class="btn btn-ghost" title="Re-run the evaluation (spends API credit)">↻</button>
+        <button id="btn-reevaluate" class="btn btn-ghost" title="Re-run (spends API credit)">↻</button>
       </div>
     </section>
   </main>
@@ -111,7 +109,7 @@
   <!-- ============ WATCHLIST TAB ============ -->
   <main id="view-watchlist" class="view">
     <ul id="watchlist-list" class="card-list"></ul>
-    <p id="watchlist-empty" class="list-empty hidden">Nothing on your watchlist. Add listings you want to keep an eye on.</p>
+    <p id="watchlist-empty" class="list-empty hidden">Nothing on your watchlist yet.</p>
   </main>
 
   <script type="module" src="sidepanel.js"></script>
