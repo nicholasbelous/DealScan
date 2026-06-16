@@ -14,6 +14,10 @@ import { getSettings } from "../shared/storage.js";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 4_000_000;
+// Reject tiny files: avatars, icons, and blurred preview thumbs are a few KB,
+// real listing photos are ~50KB+. Sending placeholders to Claude reads as
+// "fake listing" and produces false scam verdicts.
+const MIN_IMAGE_BYTES = 10_000;
 const IMAGE_FETCH_TIMEOUT_MS = 8000;
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
@@ -116,7 +120,7 @@ async function fetchOneImage(url) {
     if (!mediaType) return null;
 
     const buffer = await res.arrayBuffer();
-    if (buffer.byteLength === 0 || buffer.byteLength > MAX_IMAGE_BYTES) return null;
+    if (buffer.byteLength < MIN_IMAGE_BYTES || buffer.byteLength > MAX_IMAGE_BYTES) return null;
 
     return { media_type: mediaType, data: arrayBufferToBase64(buffer) };
   } catch {

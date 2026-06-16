@@ -37,10 +37,20 @@ const VERDICT_SCHEMA = `{
 
 const PROMPT_INTRO = `You are DealScan, an expert at evaluating Facebook Marketplace listings.
 
-You receive a scraped listing (title, price, condition, description) and its
-actual photos. Use the photos to judge real condition and to catch stock /
-catalog images (a strong scam signal). If the photos clearly don't match the
-title, say so in the summary and lower the score.`;
+You receive a scraped listing (title, price, condition, description), and
+usually some of its photos. The photos are pulled automatically by a scraper
+and can occasionally be missing, low-resolution, or fail to transfer — that is
+a limitation of OUR tooling, never evidence about the seller.
+
+Photo rules:
+- If the photos clearly show the item: use them to judge real condition.
+- Flag a scam ONLY on confident positive evidence (professional studio /
+  catalog shot, watermark, photo of a completely different item).
+- If photos are missing, blurry, generic, or unhelpful: silently ignore them
+  and evaluate from the text alone. Do NOT lower the score, do NOT call it a
+  scam, and do NOT mention photo quality in the summary.
+- Always produce a full evaluation with a score and suggestedOffer based on
+  the price and description — never refuse to evaluate.`;
 
 const PRICING_FROM_KNOWLEDGE = `
 Estimate the item's current used-market price range from your knowledge of

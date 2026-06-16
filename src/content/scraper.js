@@ -157,32 +157,32 @@
     );
   }
 
-  // Collect image URLs by walking the verified node for fbcdn/scontent URIs.
-  // Because we only walk THIS node, the images are guaranteed to be this
-  // listing's photos — never a neighboring listing's.
+  // Collect ONLY the listing's actual photos, from FB's canonical photo
+  // fields, in display order. We deliberately do NOT scavenge the node for
+  // any image-looking URL — that picks up seller avatars, category icons, and
+  // blurred preview thumbnails, which then read as "placeholder images" and
+  // poison the evaluation. No canonical photos found → return none; a
+  // text-only evaluation beats one based on the wrong images.
   function collectImageUrls(node) {
-    const urls = new Set();
-    const stack = [node];
-    let steps = 0;
-    while (stack.length > 0 && steps < 50000 && urls.size < 8) {
-      const cur = stack.pop();
-      steps += 1;
-      if (!cur || typeof cur !== "object") continue;
-      for (const [key, value] of Object.entries(cur)) {
-        if (typeof value === "string") {
-          if (
-            /^https:\/\/[^"]*(?:fbcdn|scontent)[^"]*/.test(value) &&
-            /\.(?:jpg|jpeg|png|webp)/i.test(value) &&
-            (key === "uri" || key === "image" || key === "src" || /photo|image/i.test(key))
-          ) {
-            urls.add(value);
-          }
-        } else if (value && typeof value === "object") {
-          stack.push(value);
-        }
+    const urls = [];
+    const seen = new Set();
+    const push = (uri) => {
+      if (typeof uri === "string" && /^https:\/\//.test(uri) && !seen.has(uri)) {
+        seen.add(uri);
+        urls.push(uri);
+      }
+    };
+
+    if (Array.isArray(node.listing_photos)) {
+      for (const photo of node.listing_photos) {
+        push(photo?.image?.uri ?? photo?.photo_image_url ?? photo?.uri);
       }
     }
-    return [...urls].slice(0, 6);
+    push(node.primary_listing_photo?.photo_image_url);
+    push(node.primary_listing_photo?.image?.uri);
+    push(node.primary_listing_photo?.listing_image?.uri);
+
+    return urls.slice(0, 6);
   }
 
   // Only used as a soft hint in the low-confidence payload (not for scoring).
