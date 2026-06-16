@@ -47,16 +47,33 @@
       }
       return null;
     };
-    const pickImages = () => {
-      for (const s of sources) {
-        if (Array.isArray(s.images) && s.images.length > 0) return s.images;
+    // Merge photos across sources so a single-photo meta source can't cap us
+    // at one image. Canonical JSON photos first, then the DOM gallery, then
+    // meta's primary — deduped.
+    const mergeImages = () => {
+      const byVia = {};
+      for (const s of sources) byVia[s.via] = Array.isArray(s.images) ? s.images : [];
+      const seen = new Set();
+      const out = [];
+      for (const via of ["json", "dom", "meta"]) {
+        for (const u of byVia[via] || []) {
+          if (!seen.has(u)) {
+            seen.add(u);
+            out.push(u);
+          }
+        }
       }
-      return [];
+      return out.slice(0, 6);
     };
 
     const title = pick("title");
     const price = pick("price");
     const confidence = title && price ? "high" : "low";
+
+    // Vehicle facts (mileage/year) — extracted reliably and sent as explicit
+    // fields so pricing never depends on the messy free-text description.
+    const titleEl = title ? findElementByText(title) : null;
+    const attributes = extractAttributes(title, titleEl);
 
     const data = {
       url: location.href,
@@ -69,7 +86,8 @@
       condition: pick("condition"),
       location: pick("location"),
       seller: pick("seller"),
-      images: pickImages(),
+      attributes,
+      images: mergeImages(),
     };
 
     // Lightweight diagnostics so failures are reportable from the page console.
@@ -396,6 +414,45 @@
       if (!best || t.length > best.length) best = t;
     }
     return best;
+  }
+
+  // === Vehicle / structured attributes =======================================
+  // Only facts we can extract RELIABLY: year (from the title) and mileage
+  // (from FB's "Driven X miles", anchored to the title's own container so a
+  // neighboring listing's mileage can't leak in). Anything we can't pin down
+  // is left out — Claude reads the rest from the description, and an absent
+  // value is reported honestly rather than guessed.
+  function extractAttributes(title, titleEl) {
+    const attrs = {};
+
+    const yearMatch = title && title.match(/\b(19[5-9]\d|20[0-4]\d)\b/);
+    if (yearMatch) attrs.year = yearMatch[1];
+
+    const mileage = extractMileage(titleEl);
+    if (mileage) attrs.mileage = mileage;
+
+    return Object.keys(attrs).length > 0 ? attrs : null;
+  }
+
+  function extractMileage(titleEl) {
+    // Anchor to the smallest ancestor of the title that mentions mileage —
+    // that ancestor is the open listing's detail pane, never a sidebar item.
+    const re = /Driven\s+([\d.,]{2,})\s*(miles|mi|km)\b/i;
+    const scope = titleEl ? nearestScopeWithText(titleEl, re) : null;
+    if (!scope) return null;
+    const m = scope.textContent.match(re);
+    if (!m) return null;
+    const n = Number(m[1].replace(/[.,]/g, ""));
+    if (!Number.isFinite(n) || n < 100) return null; // reject noise
+    return `${n.toLocaleString("en-US")} ${/km/i.test(m[2]) ? "km" : "miles"}`;
+  }
+
+  function nearestScopeWithText(el, re) {
+    let scope = el.parentElement;
+    for (let i = 0; i < 8 && scope; i += 1, scope = scope.parentElement) {
+      if (re.test(scope.textContent || "")) return scope;
+    }
+    return null;
   }
 
   // === Shared helpers =========================================================

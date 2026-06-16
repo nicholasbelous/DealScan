@@ -37,6 +37,7 @@ export function parseListing(raw) {
     description,
     location: cleanText(raw.location),
     seller: cleanText(raw.seller),
+    attributes: cleanAttributes(raw.attributes),
     images: Array.isArray(raw.images) ? raw.images.filter(isHttpUrl) : [],
     category: detectCategory(`${title ?? ""} ${description ?? ""}`),
   };
@@ -78,4 +79,16 @@ export function stripTracking(url) {
 
 function isHttpUrl(value) {
   return typeof value === "string" && /^https:\/\//.test(value);
+}
+
+// Keep only string/number attribute values; drop empties. Returns null when
+// nothing usable remains so the prompt can say "not listed" honestly.
+function cleanAttributes(attributes) {
+  if (!attributes || typeof attributes !== "object") return null;
+  const out = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    if (typeof value === "string" && value.trim()) out[key] = value.trim();
+    else if (typeof value === "number" && Number.isFinite(value)) out[key] = String(value);
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }

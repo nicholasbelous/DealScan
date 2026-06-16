@@ -50,7 +50,13 @@ Photo rules:
   and evaluate from the text alone. Do NOT lower the score, do NOT call it a
   scam, and do NOT mention photo quality in the summary.
 - Always produce a full evaluation with a score and suggestedOffer based on
-  the price and description — never refuse to evaluate.`;
+  the price and description — never refuse to evaluate.
+
+For vehicles: mileage and year drive value more than anything else. Use the
+"Key details" line (parsed mileage/year) and anything in the description. If
+mileage is genuinely not provided anywhere, price for typical mileage for that
+year and note in the summary that the estimate assumes typical mileage because
+none was listed — do not pretend a number you weren't given.`;
 
 const PRICING_FROM_KNOWLEDGE = `
 Estimate the item's current used-market price range from your knowledge of
@@ -119,11 +125,19 @@ function buildUserContent(listing, images) {
 }
 
 function buildListingText(listing, imageCount) {
+  const attrs =
+    listing.attributes && Object.keys(listing.attributes).length > 0
+      ? Object.entries(listing.attributes)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(", ")
+      : null;
+
   const lines = [
     `Title: ${listing.title ?? "(unknown)"}`,
     `Category: ${listing.category ?? "other"}`,
     `Asking price: ${listing.priceRaw ?? listing.price ?? "(unknown)"}`,
     `Condition (seller-stated): ${listing.condition ?? "(not stated)"}`,
+    `Key details: ${attrs ?? "(none parsed)"}`,
     `Location: ${listing.location ?? "(not stated)"}`,
     "",
     "Description:",
