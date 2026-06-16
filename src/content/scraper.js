@@ -1,18 +1,23 @@
 // DealScan scraper — runs inside facebook.com/marketplace pages.
 //
-// RELIABILITY MODEL (this is the whole point of the rewrite):
-// Facebook bundles many listings into one page (search results, "more like
-// this", the open listing). Any heuristic like "first price" or "biggest font"
-// can lock onto the WRONG item. So we trust exactly ONE source:
+// RELIABILITY MODEL
+// Facebook is a single-page app that bundles many listings into one page
+// (search results, "more like this", the open listing) and loads listing data
+// dynamically. A naive "first price / biggest font" read can lock onto the
+// WRONG item; relying only on embedded JSON refuses too often (the JSON isn't
+// present after in-app navigation). So we use THREE sources, and EVERY one is
+// verified to belong to the listing in the URL before we trust it:
 //
-//   Facebook's embedded JSON, walked to the single object whose `id` equals
-//   the item ID in the URL. Title, price, description, location, AND images
-//   all come from that one verified object — so they cannot belong to a
-//   different listing.
+//   1. Embedded JSON  — walked to the object whose `id` === the URL item id.
+//   2. Meta tags      — trusted only when og:url contains that same item id.
+//   3. DOM            — title taken from the page title (which tracks the open
+//                       listing), price read from the element next to it.
 //
-// If we can't find that object (FB changed their structure, page still
-// loading), we report confidence "low" and DO NOT guess. The side panel then
-// refuses to evaluate rather than risk a wrong verdict.
+// Each source returns the same shape; we coalesce field-by-field by priority.
+// Because all three are pinned to the current item id / page title, a value
+// can never come from a neighboring listing. Only when NO source yields both a
+// title and a price do we mark confidence "low" — the panel then refuses
+// rather than guess.
 //
 // Classic script (no ES modules in content scripts). Exposes one message:
 //   { type: "SCRAPE_LISTING" } → { ok, data: rawListing }
@@ -22,35 +27,78 @@
   if (window.__dealscanScraper) return;
   window.__dealscanScraper = true;
 
+  const PRICE_RE = /(?:CA\$|A\$|\$|£|€)\s?\d[\d,]*(?:\.\d{2})?/;
+
   function scrapeListing() {
     const itemId = currentItemId();
-    const node = itemId ? findListingNode(itemId) : null;
 
-    if (!node) {
-      // No verified data → low confidence. We deliberately do NOT fall back to
-      // DOM scraping; the panel will refuse rather than evaluate wrong data.
-      return {
-        url: location.href,
-        itemId,
-        scrapedAt: Date.now(),
-        confidence: "low",
-        title: titleFromTabAsHint(),
-        price: null,
-        description: null,
-        condition: null,
-        location: null,
-        seller: null,
-        images: [],
-      };
-    }
+    // Build each source independently (any may be null). Priority order:
+    // verified JSON → verified meta → page-title-anchored DOM.
+    const jsonNode = itemId ? findListingNode(itemId) : null;
+    const sources = [
+      jsonNode ? sourceFromJson(jsonNode) : null,
+      fromMeta(itemId),
+      fromDom(),
+    ].filter(Boolean);
 
-    return {
+    const pick = (field) => {
+      for (const s of sources) {
+        if (s[field] != null && s[field] !== "") return s[field];
+      }
+      return null;
+    };
+    const pickImages = () => {
+      for (const s of sources) {
+        if (Array.isArray(s.images) && s.images.length > 0) return s.images;
+      }
+      return [];
+    };
+
+    const title = pick("title");
+    const price = pick("price");
+    const confidence = title && price ? "high" : "low";
+
+    const data = {
       url: location.href,
       itemId,
       scrapedAt: Date.now(),
-      confidence: "high",
+      confidence,
+      title,
+      price,
+      description: pick("description"),
+      condition: pick("condition"),
+      location: pick("location"),
+      seller: pick("seller"),
+      images: pickImages(),
+    };
+
+    // Lightweight diagnostics so failures are reportable from the page console.
+    try {
+      console.debug("[DealScan] scrape", {
+        itemId,
+        confidence,
+        title,
+        price,
+        via: sources.map((s) => s.via),
+      });
+    } catch {
+      /* console may be unavailable */
+    }
+    return data;
+  }
+
+  function currentItemId() {
+    const m = location.pathname.match(/\/marketplace\/item\/(\d+)/);
+    return m ? m[1] : null;
+  }
+
+  // === SOURCE 1: embedded JSON (id-verified) ==================================
+
+  function sourceFromJson(node) {
+    return {
+      via: "json",
       title: node.marketplace_listing_title ?? node.custom_title ?? null,
-      price: extractPrice(node.listing_price),
+      price: extractJsonPrice(node.listing_price),
       description: node.redacted_description?.text ?? null,
       condition: conditionText(node),
       location: locationText(node),
@@ -59,44 +107,46 @@
     };
   }
 
-  function currentItemId() {
-    const m = location.pathname.match(/\/marketplace\/item\/(\d+)/);
-    return m ? m[1] : null;
-  }
-
-  // --- Find the one verified listing object -----------------------------------
-
   function findListingNode(itemId) {
-    for (const script of document.querySelectorAll('script[type="application/json"]')) {
+    // Some FB blobs are typed application/json, some aren't — scan any script
+    // that mentions this item and a listing field, then parse + walk it.
+    for (const script of document.querySelectorAll("script")) {
       const text = script.textContent;
-      // Cheap pre-filters before the expensive JSON.parse: the blob must
-      // mention this item AND carry listing fields.
-      if (!text || !text.includes(itemId) || !text.includes("marketplace_listing_title")) {
-        continue;
-      }
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        continue;
-      }
-      const node = walkForListing(data, itemId);
+      if (!text || text.length < 40) continue;
+      if (!text.includes(itemId) || !text.includes("marketplace_listing_title")) continue;
+      const json = extractJsonObject(text);
+      if (!json) continue;
+      const node = walkForListing(json, itemId);
       if (node) return node;
     }
     return null;
   }
 
-  // Depth-first search for the listing object: matching id AND listing fields.
-  // (Other objects reuse the id — tracking refs, comments — so we require a
-  // listing-specific field to be sure we have the real thing.)
+  // A <script> may be pure JSON or JS that contains a JSON literal. Try a
+  // straight parse first, then fall back to the first balanced {...} blob.
+  function extractJsonObject(text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      /* not pure JSON — try to slice out a JSON object below */
+    }
+    const start = text.indexOf("{");
+    if (start === -1) return null;
+    try {
+      return JSON.parse(text.slice(start));
+    } catch {
+      return null;
+    }
+  }
+
+  // Depth-first search for the listing object: matching id AND a listing field.
   function walkForListing(root, itemId) {
     const stack = [root];
     let steps = 0;
-    while (stack.length > 0 && steps < 300000) {
+    while (stack.length > 0 && steps < 400000) {
       const node = stack.pop();
       steps += 1;
       if (!node || typeof node !== "object") continue;
-
       if (
         node.id === itemId &&
         (node.marketplace_listing_title != null || node.listing_price != null)
@@ -110,24 +160,17 @@
     return null;
   }
 
-  // --- Field extractors (all read from the verified node only) ----------------
-
-  function extractPrice(listingPrice) {
+  function extractJsonPrice(listingPrice) {
     if (!listingPrice || typeof listingPrice !== "object") return null;
     if (listingPrice.formatted_amount) return listingPrice.formatted_amount;
-    if (listingPrice.amount != null) {
-      const cur = listingPrice.currency === "USD" ? "$" : "";
-      return `${cur}${listingPrice.amount}`;
-    }
+    if (listingPrice.amount != null) return formatAmount(listingPrice.amount, listingPrice.currency);
     return null;
   }
 
   function conditionText(node) {
-    // FB stores condition in a few shapes across page versions.
     return (
       node.condition?.text ??
-      node.condition ??
-      node.attribute_data?.find?.((a) => /condition/i.test(a?.label ?? ""))?.value ??
+      (typeof node.condition === "string" ? node.condition : null) ??
       null
     );
   }
@@ -157,12 +200,9 @@
     );
   }
 
-  // Collect ONLY the listing's actual photos, from FB's canonical photo
-  // fields, in display order. We deliberately do NOT scavenge the node for
-  // any image-looking URL — that picks up seller avatars, category icons, and
-  // blurred preview thumbnails, which then read as "placeholder images" and
-  // poison the evaluation. No canonical photos found → return none; a
-  // text-only evaluation beats one based on the wrong images.
+  // ONLY the listing's real photos, from FB's canonical photo fields, in order.
+  // We never scavenge arbitrary image URLs (avatars/icons/blur thumbs read as
+  // "placeholder images" and poison the evaluation).
   function collectImageUrls(node) {
     const urls = [];
     const seen = new Set();
@@ -172,7 +212,6 @@
         urls.push(uri);
       }
     };
-
     if (Array.isArray(node.listing_photos)) {
       for (const photo of node.listing_photos) {
         push(photo?.image?.uri ?? photo?.photo_image_url ?? photo?.uri);
@@ -181,21 +220,203 @@
     push(node.primary_listing_photo?.photo_image_url);
     push(node.primary_listing_photo?.image?.uri);
     push(node.primary_listing_photo?.listing_image?.uri);
-
     return urls.slice(0, 6);
   }
 
-  // Only used as a soft hint in the low-confidence payload (not for scoring).
-  function titleFromTabAsHint() {
-    const t = document.title
-      .replace(/^\(\d+\)\s*/, "")
-      .replace(/^Marketplace\s*[-–—]\s*/i, "")
-      .replace(/\s*\|\s*Facebook\s*$/i, "")
-      .trim();
-    return t && !/^(marketplace|facebook|search results)$/i.test(t) ? t : null;
+  // === SOURCE 2: meta tags (og:url-verified) ==================================
+
+  function fromMeta(itemId) {
+    const ogUrl = metaContent("og:url");
+    // Trust meta ONLY if it's for this exact item (handles stale tags after
+    // in-app navigation, where og:url still points at the first-loaded item).
+    if (!itemId || !ogUrl || !ogUrl.includes(itemId)) return null;
+
+    const title = cleanTitleString(metaContent("og:title"));
+    if (!title) return null;
+
+    const amount = metaContent("product:price:amount") || metaContent("og:price:amount");
+    const currency =
+      metaContent("product:price:currency") || metaContent("og:price:currency") || "USD";
+    const image = metaContent("og:image");
+
+    return {
+      via: "meta",
+      title,
+      price: amount ? formatAmount(amount, currency) : null,
+      description: metaContent("og:description"),
+      condition: null,
+      location: null,
+      seller: null,
+      images: image && /^https:\/\//.test(image) ? [image] : [],
+    };
   }
 
-  // --- Message interface ------------------------------------------------------
+  function metaContent(prop) {
+    const el =
+      document.querySelector(`meta[property="${prop}"]`) ||
+      document.querySelector(`meta[name="${prop}"]`);
+    const content = el?.getAttribute("content");
+    return content && content.trim() ? content.trim() : null;
+  }
+
+  // === SOURCE 3: DOM anchored on the page title ===============================
+
+  function fromDom() {
+    const title = listingTitleFromDoc();
+    if (!title) return null;
+
+    const titleEl = findElementByText(title);
+    const price = titleEl ? priceNearElement(titleEl) : null;
+
+    return {
+      via: "dom",
+      title,
+      price,
+      description: longestDetailText(),
+      condition: labeledValueDom("Condition"),
+      location: locationFromDom(),
+      seller: null,
+      images: domImages(),
+    };
+  }
+
+  // document.title tracks the open listing across in-app navigation; og:title
+  // is a fallback for the initial load.
+  function listingTitleFromDoc() {
+    return cleanTitleString(document.title) || cleanTitleString(metaContent("og:title"));
+  }
+
+  function cleanTitleString(raw) {
+    if (!raw) return null;
+    let t = raw
+      .replace(/^\(\d+\)\s*/, "") // "(7) "
+      .replace(/\s*\|\s*Facebook.*$/i, "") // "| Facebook ..."
+      .replace(/\s*[-–—]\s*Facebook\b.*$/i, "") // "- Facebook Marketplace"
+      .replace(/^Marketplace\s*[-–—|]\s*/i, "") // "Marketplace - "
+      .trim();
+    if (!t) return null;
+    if (/^(marketplace|facebook|facebook marketplace|search results|buy and sell)/i.test(t)) {
+      return null;
+    }
+    return t;
+  }
+
+  function findElementByText(text) {
+    const target = normalizeText(text);
+    for (const el of document.querySelectorAll('h1, h2, [role="heading"]')) {
+      if (normalizeText(el.textContent) === target) return el;
+    }
+    // Leaf-ish element exactly matching (FB often renders the title in a span).
+    for (const el of document.querySelectorAll("span, div")) {
+      if (el.childElementCount <= 1 && normalizeText(el.textContent) === target) return el;
+    }
+    return null;
+  }
+
+  // The asking price renders right after the title. Climb a few ancestors from
+  // the title element; in each, return the first price-shaped text node that
+  // comes AFTER the title (so a price sitting above the title can't win).
+  function priceNearElement(titleEl) {
+    let scope = titleEl.parentElement;
+    for (let i = 0; i < 6 && scope; i += 1, scope = scope.parentElement) {
+      const price = firstPriceAfter(scope, titleEl);
+      if (price) return price;
+    }
+    return null;
+  }
+
+  function firstPriceAfter(scope, titleEl) {
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+    let passedTitle = false;
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!passedTitle) {
+        if (titleEl.contains(node)) passedTitle = true;
+        continue;
+      }
+      const txt = node.textContent.trim();
+      if (txt.length > 25) continue; // skip prose that merely mentions a price
+      const m = txt.match(PRICE_RE);
+      if (m) return m[0];
+    }
+    return null;
+  }
+
+  function labeledValueDom(label) {
+    for (const el of document.querySelectorAll("span, div")) {
+      const t = el.textContent?.trim() ?? "";
+      if (
+        el.childElementCount <= 2 &&
+        t.startsWith(label) &&
+        t.length < 80 &&
+        t.length > label.length
+      ) {
+        return t.slice(label.length).replace(/^[\s:·–-]+/, "").trim() || null;
+      }
+    }
+    return null;
+  }
+
+  function locationFromDom() {
+    const m = document.body.textContent.match(/Listed[^·\n]*?\bin\s+([A-Z][\w\s.,'-]{2,40})/);
+    return m ? m[1].trim() : null;
+  }
+
+  // Largest scontent/fbcdn images on the page (avatars are ~40px, rail thumbs
+  // ~150px, real listing photos 350px+). Best-effort fallback when JSON/meta
+  // photos aren't available; the service worker also drops tiny files.
+  function domImages() {
+    const candidates = [...document.querySelectorAll("img")]
+      .map((img) => ({
+        src: img.currentSrc || img.src || "",
+        area: (img.naturalWidth || 0) * (img.naturalHeight || 0),
+        w: img.naturalWidth || 0,
+      }))
+      .filter((c) => /scontent|fbcdn/.test(c.src) && c.w >= 350)
+      .sort((a, b) => b.area - a.area);
+
+    const urls = [];
+    for (const c of candidates) {
+      if (c.src && !urls.includes(c.src)) urls.push(c.src);
+      if (urls.length >= 3) break;
+    }
+    return urls;
+  }
+
+  function longestDetailText() {
+    let best = null;
+    const scope =
+      document.querySelector('div[role="main"]') || document.querySelector("body");
+    if (!scope) return null;
+    for (const el of scope.querySelectorAll("span, div")) {
+      if (el.childElementCount > 0) continue;
+      const t = el.textContent?.trim() ?? "";
+      if (t.length < 50) continue;
+      if (PRICE_RE.test(t) && t.length < 60) continue;
+      if (!best || t.length > best.length) best = t;
+    }
+    return best;
+  }
+
+  // === Shared helpers =========================================================
+
+  function formatAmount(amount, currency) {
+    const sym =
+      currency === "USD" || currency == null
+        ? "$"
+        : currency === "GBP"
+          ? "£"
+          : currency === "EUR"
+            ? "€"
+            : "";
+    return `${sym}${amount}`;
+  }
+
+  function normalizeText(s) {
+    return (s || "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  // === Message interface ======================================================
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "SCRAPE_LISTING") return false;
