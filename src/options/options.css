@@ -1,27 +1,29 @@
 /* DealScan options page — auto light/dark, mirrors the side panel palette. */
 
+/* Brand palette derived from the DealScan logo (kept in sync with the side
+   panel): pine green #2f4a3e, lime #78c030, cream #f3f1e7. */
 :root {
-  --bg: #f0f2f5;
+  --bg: #f3f1e7;             /* warm cream page */
   --bg-card: #ffffff;
   --bg-input: #ffffff;
-  --text: #1c1e21;
-  --muted: #65676b;
-  --border: #d8dadf;
-  --accent: #1a7f37;
-  --accent-hover: #1f9d45;
+  --text: #20302a;
+  --muted: #5f6b63;
+  --border: #e4dfd2;
+  --accent: #2f5d45;
+  --accent-hover: #3a7254;
   --error: #c43e3e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #18191a;
-    --bg-card: #242526;
-    --bg-input: #3a3d41;
-    --text: #e4e6eb;
-    --muted: #9aa0a6;
-    --border: #3e4145;
-    --accent: #2bb55a;
-    --accent-hover: #34cc67;
+    --bg: #181d1a;
+    --bg-card: #232a26;
+    --bg-input: #2f3833;
+    --text: #e8eae4;
+    --muted: #9aa39c;
+    --border: #39433d;
+    --accent: #5fb87a;
+    --accent-hover: #6fc98a;
     --error: #e06c6c;
   }
 }
@@ -37,7 +39,8 @@ body {
 
 .page { max-width: 560px; margin: 0 auto; padding: 32px 20px 60px; }
 
-header h1 { font-size: 22px; }
+header h1 { font-size: 22px; display: flex; align-items: center; gap: 9px; }
+.logo-img { width: 28px; height: 28px; border-radius: 7px; }
 .subtitle { color: var(--muted); margin-top: 6px; line-height: 1.4; }
 
 .card {

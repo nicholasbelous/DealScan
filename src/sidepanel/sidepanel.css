@@ -1,19 +1,23 @@
 /* DealScan side panel — auto light/dark via prefers-color-scheme. */
 
+/* Brand palette derived from the DealScan logo:
+   pine green #2f4a3e (ring/handle), lime #78c030 (bolt), cream #f3f1e7 (bg). */
 :root {
   --bg: #ffffff;
-  --bg-card: #f5f6f7;
+  --bg-card: #f4f2ea;        /* warm cream, from the logo background */
   --bg-input: #ffffff;
-  --text: #1c1e21;
-  --muted: #65676b;
-  --border: #d8dadf;
-  --accent: #1a7f37;
-  --accent-hover: #1f9d45;
+  --text: #20302a;           /* deep pine-gray */
+  --muted: #5f6b63;
+  --border: #e4dfd2;         /* warm border */
+  --accent: #2f5d45;         /* pine green — primary buttons, active states */
+  --accent-hover: #3a7254;
+  --lime: #78c030;           /* the bolt — energy accents */
   --error: #c43e3e;
 
-  /* Score band colors (used by scoreColor() in formatter.js) */
-  --great: #1a7f37;
-  --good: #5aa63c;
+  /* Score bands (used by scoreColor() in formatter.js). great/good are the
+     logo's lime family; fair→avoid stay amber→red for clear warnings. */
+  --great: #4e9a2f;
+  --good: #7ab33c;
   --fair: #d9a514;
   --poor: #e07b39;
   --avoid: #c43e3e;
@@ -21,15 +25,22 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1e21;
-    --bg-card: #2a2d31;
-    --bg-input: #3a3d41;
-    --text: #e4e6eb;
-    --muted: #9aa0a6;
-    --border: #3e4145;
-    --accent: #2bb55a;
-    --accent-hover: #34cc67;
+    --bg: #181d1a;
+    --bg-card: #232a26;
+    --bg-input: #2f3833;
+    --text: #e8eae4;
+    --muted: #9aa39c;
+    --border: #39433d;
+    --accent: #5fb87a;       /* lifted pine for dark-bg contrast */
+    --accent-hover: #6fc98a;
+    --lime: #84c83c;
     --error: #e06c6c;
+
+    --great: #7ac23a;
+    --good: #98c84a;
+    --fair: #e0b53c;
+    --poor: #e8915a;
+    --avoid: #e06c6c;
   }
 }
 
@@ -53,7 +64,8 @@ body {
   padding: 10px 12px 0;
 }
 
-.logo { font-weight: 700; font-size: 16px; }
+.logo { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 7px; }
+.logo-img { width: 22px; height: 22px; border-radius: 6px; }
 
 .tabs { display: flex; gap: 4px; margin-top: 8px; }
 
@@ -170,7 +182,7 @@ body {
   gap: 2px;
 }
 
-.price-cell.highlight { outline: 2px solid var(--accent); }
+.price-cell.highlight { outline: 2px solid var(--lime); }
 .price-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
 .price-value { font-size: 16px; font-weight: 700; }
 

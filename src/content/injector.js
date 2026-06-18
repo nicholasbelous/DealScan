@@ -25,7 +25,7 @@
       padding: "12px 20px",
       borderRadius: "24px",
       border: "none",
-      background: "#1a7f37",
+      background: "#2f5d45", // brand pine green (matches the logo + panel)
       color: "#fff",
       fontSize: "15px",
       fontWeight: "600",
@@ -36,11 +36,11 @@
     });
     btn.addEventListener("mouseenter", () => {
       btn.style.transform = "scale(1.05)";
-      btn.style.background = "#1f9d45";
+      btn.style.background = "#3a7254";
     });
     btn.addEventListener("mouseleave", () => {
       btn.style.transform = "scale(1)";
-      btn.style.background = "#1a7f37";
+      btn.style.background = "#2f5d45";
     });
 
     btn.addEventListener("click", () => {
