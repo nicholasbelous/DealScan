@@ -197,11 +197,40 @@ async function evaluateActiveTab({ force = false } = {}) {
 }
 
 async function scrapeActiveListing(tabId) {
-  const raw = await sendToTab(tabId, { type: "SCRAPE_LISTING" });
+  const raw = await scrapeSettled(tabId);
   const listing = parseListing(raw);
   current = { listing, verdict: null };
   return listing;
 }
+
+// Facebook loads listing data asynchronously after an in-app click, so the
+// first read can be stale or mid-transition (this is why a refresh "fixed" it).
+// Accept immediately when an item-id-verified source is present (the refresh
+// case); otherwise retry briefly until two consecutive DOM-only reads agree and
+// the page is no longer mid-swap. Settles fast in practice; refuses (rather
+// than misfires) only if the page never stabilizes.
+const SCRAPE_ATTEMPTS = 6;
+const SCRAPE_INTERVAL_MS = 450;
+
+async function scrapeSettled(tabId) {
+  let prev = null;
+  for (let i = 0; i < SCRAPE_ATTEMPTS; i++) {
+    const raw = await sendToTab(tabId, { type: "SCRAPE_LISTING" });
+    if (raw.verified) return raw; // pinned to the URL's item id — trust now
+    const stable =
+      raw.confidence === "high" &&
+      !raw.transitioning &&
+      prev &&
+      prev.title === raw.title &&
+      prev.price === raw.price;
+    if (stable) return raw;
+    prev = raw;
+    if (i < SCRAPE_ATTEMPTS - 1) await sleep(SCRAPE_INTERVAL_MS);
+  }
+  return prev; // best effort — the parser's reliability gate handles the rest
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function getListingTab() {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });

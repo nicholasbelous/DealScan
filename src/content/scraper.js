@@ -70,6 +70,19 @@
     const price = pick("price");
     const confidence = title && price ? "high" : "low";
 
+    // "verified" = an item-id-pinned source (JSON or meta) supplied BOTH the
+    // title and price. Those sources only return data for THIS item, so they
+    // can't be stale from a previous listing. The DOM source isn't pinned, so
+    // right after an in-app click it can briefly hold the old listing — the
+    // side panel waits for a verified or stable read before trusting it.
+    const verified = sources.some(
+      (s) => (s.via === "json" || s.via === "meta") && s.title && s.price
+    );
+
+    // True when the page's og:url still names a DIFFERENT item than the URL —
+    // i.e. Facebook hasn't finished swapping to the clicked listing yet.
+    const transitioning = isTransitioning(itemId);
+
     // Vehicle facts (mileage/year) — extracted reliably and sent as explicit
     // fields so pricing never depends on the messy free-text description.
     const titleEl = title ? findElementByText(title) : null;
@@ -80,6 +93,8 @@
       itemId,
       scrapedAt: Date.now(),
       confidence,
+      verified,
+      transitioning,
       title,
       price,
       description: pick("description"),
@@ -95,6 +110,8 @@
       console.debug("[DealScan] scrape", {
         itemId,
         confidence,
+        verified,
+        transitioning,
         title,
         price,
         via: sources.map((s) => s.via),
@@ -275,6 +292,15 @@
       document.querySelector(`meta[name="${prop}"]`);
     const content = el?.getAttribute("content");
     return content && content.trim() ? content.trim() : null;
+  }
+
+  // After an in-app click, og:url can still point at the previously-open item
+  // for a beat. If it names a DIFFERENT item id than the URL, the page is
+  // mid-swap and DOM reads aren't trustworthy yet.
+  function isTransitioning(itemId) {
+    const ogUrl = metaContent("og:url");
+    const m = ogUrl && ogUrl.match(/\/item\/(\d+)/);
+    return !!(m && itemId && m[1] !== itemId);
   }
 
   // === SOURCE 3: DOM anchored on the page title ===============================
