@@ -31,7 +31,7 @@ const VERDICT_SCHEMA = `{
   "marketLow": number,        // low end of used market range
   "marketHigh": number,       // high end of used market range
   "suggestedOffer": number,   // what the buyer should offer
-  "savingsPercent": number,   // % below (positive) / above (negative) market
+  "savingsPercent": number,   // ASKING price vs market midpoint: positive = asking is BELOW market (a deal), negative = asking is ABOVE market (overpriced). NOT the offer.
   "summary": string           // ONE concise sentence; mention any deal-breaker
 }`;
 
@@ -76,8 +76,24 @@ ${VERDICT_SCHEMA}
 
 Scoring: 85-100 Great Deal, 70-84 Good Deal, 50-69 Fair, 30-49 Overpriced,
 0-29 Avoid. Weigh asking price vs the used market range and the condition you
-see in the photos. Keep "summary" to one sentence. Return numbers plain (no
-"$" or commas); use null for genuinely unknown numeric fields.`;
+see in the photos.
+
+savingsPercent compares the ASKING price to the midpoint of marketLow/marketHigh
+— compute (midpoint - asking) / midpoint * 100. It must NOT be based on the
+suggested offer.
+
+Internal consistency is REQUIRED — score, verdict, savingsPercent, and summary
+must all agree:
+- If askingPrice is at or above marketHigh, the asking is OVERPRICED:
+  savingsPercent must be negative, verdict is "Overpriced" or "Avoid", score
+  below 50, and the summary must NOT call the price "competitive", "fair", or
+  "a good deal". Say it is above market and to negotiate down.
+- Only call pricing competitive/good when askingPrice is at or below the
+  market midpoint (savingsPercent positive).
+- suggestedOffer is the negotiation target and is independent of savingsPercent.
+
+Keep "summary" to one sentence. Return numbers plain (no "$" or commas); use
+null for genuinely unknown numeric fields.`;
 
 /**
  * Evaluate a scraped listing.
