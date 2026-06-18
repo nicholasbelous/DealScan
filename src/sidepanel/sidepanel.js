@@ -9,7 +9,6 @@ import { parseListing } from "../shared/parser.js";
 import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
 import {
   formatMoney,
-  formatPercent,
   formatRelative,
   scoreColor,
   truncate,
@@ -37,15 +36,36 @@ document.addEventListener("DOMContentLoaded", () => {
   bindTabs();
   bindActions();
   populateCategoryFilter();
-  evaluateActiveTab();
+  routeInitialState();
 });
 
-// Re-evaluate when Facebook SPA-navigates to another listing while we're open.
+// On open: auto-evaluate ONLY if the panel was opened by the page's "Evaluate
+// Deal" button (which sets a one-shot flag). Opening via the toolbar icon just
+// previews — never auto-spends.
+async function routeInitialState() {
+  const pending = await consumePendingEvaluate();
+  const tab = await getListingTab();
+  if (pending && tab && pending.tabId === tab.id) {
+    evaluateActiveTab();
+  } else {
+    previewActiveTab();
+  }
+}
+
+async function consumePendingEvaluate() {
+  const { pendingEvaluate } = await chrome.storage.session.get("pendingEvaluate");
+  if (pendingEvaluate) chrome.storage.session.remove("pendingEvaluate");
+  if (!pendingEvaluate || Date.now() - pendingEvaluate.at > 10000) return null;
+  return pendingEvaluate;
+}
+
+// SPA navigation to another listing: PREVIEW it (free), don't auto-evaluate.
+// Passively browsing listings with the panel open must never spend money.
 let navDebounce = null;
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type !== "LISTING_CHANGED") return;
   clearTimeout(navDebounce);
-  navDebounce = setTimeout(() => evaluateActiveTab(), 1200);
+  navDebounce = setTimeout(() => previewActiveTab(), 1200);
 });
 
 // ---------- Tabs -----------------------------------------------------------------
@@ -66,6 +86,7 @@ function bindTabs() {
 function bindActions() {
   $("btn-retry").addEventListener("click", () => evaluateActiveTab());
   $("btn-reload").addEventListener("click", () => evaluateActiveTab());
+  $("btn-evaluate-now").addEventListener("click", () => evaluateActiveTab());
   $("btn-reevaluate").addEventListener("click", () => evaluateActiveTab({ force: true }));
 
   $("btn-save").addEventListener("click", async () => {
@@ -112,18 +133,43 @@ function flashButton(btn, label) {
 
 // ---------- Evaluate flow ----------------------------------------------------------
 
-async function evaluateActiveTab({ force = false } = {}) {
+// Scrape the active listing and show it as "ready to evaluate" — no API call,
+// no spend. Used on panel open (via icon) and on SPA navigation.
+async function previewActiveTab() {
   const tab = await getListingTab();
   if (!tab) {
     showState("idle");
     return;
   }
+  try {
+    const listing = await scrapeActiveListing(tab.id);
+    if (!listing.reliable) {
+      showState("unreliable");
+      return;
+    }
+    $("ready-title").textContent = `Listing detected: ${truncate(listing.title, 48)}`;
+    showState("ready");
+  } catch {
+    showState("idle");
+  }
+}
+
+// Scrape + evaluate (spends API credit). Triggered only by explicit user
+// action: the page's Evaluate button, the in-panel Evaluate button, or retry.
+let evaluating = false;
+async function evaluateActiveTab({ force = false } = {}) {
+  if (evaluating) return; // guard against rapid clicks double-charging
+  evaluating = true;
 
   try {
+    const tab = await getListingTab();
+    if (!tab) {
+      showState("idle");
+      return;
+    }
+
     showState("loading", "Reading listing…");
-    const raw = await sendToTab(tab.id, { type: "SCRAPE_LISTING" });
-    const listing = parseListing(raw);
-    current = { listing, verdict: null };
+    const listing = await scrapeActiveListing(tab.id);
 
     // The reliability gate. Refuse rather than evaluate possibly-wrong data.
     if (!listing.reliable) {
@@ -145,7 +191,16 @@ async function evaluateActiveTab({ force = false } = {}) {
   } catch (err) {
     $("error-message").textContent = String(err.message ?? err);
     showState("error");
+  } finally {
+    evaluating = false;
   }
+}
+
+async function scrapeActiveListing(tabId) {
+  const raw = await sendToTab(tabId, { type: "SCRAPE_LISTING" });
+  const listing = parseListing(raw);
+  current = { listing, verdict: null };
+  return listing;
 }
 
 async function getListingTab() {
@@ -189,7 +244,7 @@ function sendMessageOnce(tabId, message) {
 }
 
 function showState(name, loadingLabel) {
-  ["idle", "loading", "unreliable", "error", "verdict"].forEach((s) =>
+  ["idle", "loading", "ready", "unreliable", "error", "verdict"].forEach((s) =>
     $(`state-${s}`).classList.toggle("hidden", s !== name)
   );
   if (loadingLabel) $("loading-label").textContent = loadingLabel;
@@ -229,11 +284,11 @@ function renderVerdict(listing, v) {
       : "—";
   $("p-offer").textContent = formatMoney(v.suggestedOffer, cur);
 
-  const savings = v.savingsPercent;
+  const savings = Number(v.savingsPercent);
   const savingsEl = $("p-savings");
-  if (savings != null && Number.isFinite(Number(savings))) {
-    const below = Number(savings) >= 0;
-    savingsEl.textContent = `${formatPercent(Math.abs(savings)).replace("+", "")} ${below ? "below" : "above"}`;
+  if (Number.isFinite(savings)) {
+    const below = savings >= 0;
+    savingsEl.textContent = `${Math.abs(Math.round(savings))}% ${below ? "below" : "above"}`;
     savingsEl.style.color = below ? "var(--great)" : "var(--avoid)";
   } else {
     savingsEl.textContent = "—";

@@ -6,13 +6,6 @@ export function formatMoney(amount, currency = "$") {
   return `${currency}${Math.round(Number(amount)).toLocaleString("en-US")}`;
 }
 
-/** 12.345 → "+12%", -8 → "-8%". Sign communicates above/below market. */
-export function formatPercent(value) {
-  if (value == null || !Number.isFinite(Number(value))) return "—";
-  const rounded = Math.round(Number(value));
-  return `${rounded > 0 ? "+" : ""}${rounded}%`;
-}
-
 /** Timestamp → "Jun 10" this year, "Jun 10, 2025" otherwise. */
 export function formatDate(timestamp) {
   if (!timestamp) return "—";

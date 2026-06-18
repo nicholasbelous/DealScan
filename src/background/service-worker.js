@@ -42,8 +42,15 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message?.type) {
     case "OPEN_SIDE_PANEL":
-      // From the floating button. Must run synchronously off the user gesture.
+      // From the floating "Evaluate Deal" button. Must call open() synchronously
+      // off the user gesture. We also flag that THIS tab was opened with intent
+      // to evaluate, so the panel auto-evaluates on load — whereas opening the
+      // panel via the toolbar icon or in-app navigation only previews (never
+      // spends money on a listing the user is just browsing past).
       if (sender.tab?.windowId != null) {
+        chrome.storage.session.set({
+          pendingEvaluate: { tabId: sender.tab.id, at: Date.now() },
+        });
         chrome.sidePanel
           .open({ windowId: sender.tab.windowId })
           .then(() => sendResponse({ ok: true }))
@@ -101,12 +108,10 @@ async function handleEvaluate(listing, force) {
 // --- Image fetching (background bypasses CORS for *.fbcdn.net) -----------------
 
 async function fetchImages(urls) {
-  const out = [];
-  for (const url of urls.slice(0, MAX_IMAGES)) {
-    const img = await fetchOneImage(url);
-    if (img) out.push(img);
-  }
-  return out;
+  // Fetch in parallel — 3 sequential fetches tripled the pre-evaluation wait.
+  // Promise.all preserves order, so photos stay in listing display order.
+  const results = await Promise.all(urls.slice(0, MAX_IMAGES).map(fetchOneImage));
+  return results.filter(Boolean);
 }
 
 async function fetchOneImage(url) {

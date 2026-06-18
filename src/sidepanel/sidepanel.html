@@ -36,6 +36,15 @@
       </div>
     </section>
 
+    <!-- State: a listing is detected, ready to evaluate on click (no spend) -->
+    <section id="state-ready" class="state hidden">
+      <div class="empty-card">
+        <p class="empty-icon">⚡</p>
+        <p id="ready-title">Listing detected.</p>
+        <button id="btn-evaluate-now" class="btn btn-primary">Evaluate This Listing</button>
+      </div>
+    </section>
+
     <!-- State: couldn't read listing reliably (refuse, no spend) -->
     <section id="state-unreliable" class="state hidden">
       <div class="empty-card">

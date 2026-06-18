@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "DealScan — Marketplace Deal Evaluator",
   "version": "0.1.0",
-  "description": "Evaluate Facebook Marketplace listings with Claude AI — deal score, price breakdown, red flags, and negotiation tips.",
+  "description": "Evaluate Facebook Marketplace listings with Claude AI — deal score, price breakdown, and a suggested offer.",
 
   "icons": {
     "16": "assets/icons/icon16.png",
