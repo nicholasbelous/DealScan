@@ -8,7 +8,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Load current settings into the form.
   const settings = await getSettings();
   $("anthropic-key").value = settings.anthropicKey;
-  $("ebay-id").value = settings.ebayAppId;
   $("model").value = settings.model;
   $("analyze-images").checked = settings.analyzeImages === true;
   $("web-search").checked = settings.useWebSearch === true;
@@ -32,7 +31,6 @@ async function save() {
 
   await saveSettings({
     anthropicKey: key,
-    ebayAppId: $("ebay-id").value.trim(),
     model: $("model").value,
     analyzeImages: $("analyze-images").checked,
     useWebSearch: $("web-search").checked,

@@ -13,7 +13,6 @@ const KEYS = {
 
 const DEFAULT_SETTINGS = {
   anthropicKey: "",
-  ebayAppId: "",
   model: "claude-haiku-4-5",
   // Web search adds ~10x cost per evaluation (flat per-search fee + thousands
   // of result tokens). Off by default; opt in via Options for big purchases.
