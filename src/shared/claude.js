@@ -44,13 +44,25 @@ a limitation of OUR tooling, never evidence about the seller.
 
 Photo rules:
 - If the photos clearly show the item: use them to judge real condition.
-- Flag a scam ONLY on confident positive evidence (professional studio /
-  catalog shot, watermark, photo of a completely different item).
+- Our scraper can occasionally attach an image from ELSEWHERE on the page — an
+  ad, a banner, or stock scenery (e.g. a car ad, lab chemicals, a landscape).
+  If some photos match the item and others are clearly unrelated, the unrelated
+  ones are scraping noise: IGNORE them and judge from the photos that match plus
+  the text. Never call the listing a scam or mismatched because of a stray image
+  that obviously belongs to page furniture rather than the listing.
+- Flag a scam ONLY on confident positive evidence that the LISTING'S OWN photos
+  are fake — a professional studio/catalog shot or watermark used as the item
+  photo. When in doubt, do not accuse.
 - If photos are missing, blurry, generic, or unhelpful: silently ignore them
   and evaluate from the text alone. Do NOT lower the score, do NOT call it a
   scam, and do NOT mention photo quality in the summary.
 - Always produce a full evaluation with a score and suggestedOffer based on
   the price and description — never refuse to evaluate.
+
+Free listings: if the asking price is 0 (a giveaway), still estimate the item's
+normal used-market worth for marketLow/marketHigh, set suggestedOffer to 0, and
+score it as a strong deal — a free, usable item is worth grabbing — unless the
+photos or description show it is broken, incomplete, or a scam.
 
 For vehicles: mileage and year drive value more than anything else. Use the
 "Key details" line (parsed mileage/year) and anything in the description. If

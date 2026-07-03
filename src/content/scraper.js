@@ -48,14 +48,15 @@
       return null;
     };
     // Merge photos across sources so a single-photo meta source can't cap us
-    // at one image. Canonical JSON photos first, then the DOM gallery, then
-    // meta's primary — deduped.
+    // at one image. Canonical JSON photos first, then meta's primary — deduped.
+    // We never scavenge arbitrary page <img>s (they pull in ads/rails and
+    // poison the evaluation), so only these two verified sources contribute.
     const mergeImages = () => {
       const byVia = {};
       for (const s of sources) byVia[s.via] = Array.isArray(s.images) ? s.images : [];
       const seen = new Set();
       const out = [];
-      for (const via of ["json", "dom", "meta"]) {
+      for (const via of ["json", "meta"]) {
         for (const u of byVia[via] || []) {
           if (!seen.has(u)) {
             seen.add(u);
@@ -320,7 +321,13 @@
       condition: labeledValueDom("Condition"),
       location: locationFromDom(),
       seller: null,
-      images: domImages(),
+      // Deliberately NO images from the DOM. On a real listing page the biggest
+      // <img> elements are just as often ads, "more like this" thumbnails, or
+      // banners (a Chevy ad, stock scenery, etc.) as the listing's own photos —
+      // and feeding those to Claude reads as a mismatched/scam listing and
+      // produces a false "Avoid". Real photos come only from the canonical
+      // JSON listing_photos and the verified meta og:image.
+      images: [],
     };
   }
 
@@ -417,30 +424,6 @@
   function locationFromDom() {
     const m = document.body.textContent.match(/Listed[^·\n]*?\bin\s+([A-Z][\w\s.,'-]{2,40})/);
     return m ? m[1].trim() : null;
-  }
-
-  // Largest scontent/fbcdn images on the page (avatars are ~40px, rail thumbs
-  // ~150px, real listing photos 350px+). Best-effort fallback when JSON/meta
-  // photos aren't available; the service worker also drops tiny files.
-  function domImages() {
-    for (const root of searchRoots()) {
-      const candidates = [...root.querySelectorAll("img")]
-        .map((img) => ({
-          src: img.currentSrc || img.src || "",
-          area: (img.naturalWidth || 0) * (img.naturalHeight || 0),
-          w: img.naturalWidth || 0,
-        }))
-        .filter((c) => /scontent|fbcdn/.test(c.src) && c.w >= 350)
-        .sort((a, b) => b.area - a.area);
-
-      const urls = [];
-      for (const c of candidates) {
-        if (c.src && !urls.includes(c.src)) urls.push(c.src);
-        if (urls.length >= 3) break;
-      }
-      if (urls.length > 0) return urls;
-    }
-    return [];
   }
 
   function longestDetailText() {

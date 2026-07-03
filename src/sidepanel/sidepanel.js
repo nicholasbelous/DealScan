@@ -331,14 +331,16 @@ function renderVerdict(listing, v) {
       : `Deal score ${score} out of 100 — ${v.verdict ?? ""}`.trim()
   );
 
-  // Prices
+  // Prices. A genuine $0 asking is a free giveaway — show "Free" rather than
+  // "$0" so the panel doesn't look broken.
   const cur = listing.currency;
-  $("p-asking").textContent = formatMoney(v.askingPrice ?? listing.price, cur);
+  const isFree = v.askingPrice === 0;
+  $("p-asking").textContent = isFree ? "Free" : formatMoney(v.askingPrice ?? listing.price, cur);
   $("p-market").textContent =
-    v.marketLow != null && v.marketHigh != null
+    v.marketLow != null && v.marketHigh != null && v.marketHigh > 0
       ? `${formatMoney(v.marketLow, cur)}–${formatMoney(v.marketHigh, cur)}`
       : "—";
-  $("p-offer").textContent = formatMoney(v.suggestedOffer, cur);
+  $("p-offer").textContent = isFree ? "Free" : formatMoney(v.suggestedOffer, cur);
 
   const savings = Number(v.savingsPercent);
   const savingsEl = $("p-savings");
