@@ -12,6 +12,10 @@ dist/
 build/
 *.zip
 
+# Raw, unedited screenshot originals — the resized store-ready copies are kept,
+# these large source files are not.
+store-assets/screenshots/raw/
+
 # Logs
 *.log
 npm-debug.log*
