@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DealScan — Marketplace Deal Evaluator</title>
+  <meta name="description" content="A Chrome extension that scores Facebook Marketplace deals using AI." />
+
+  <!-- Redirect to the Chrome Web Store listing. Meta refresh works without JS;
+       the script below makes it instant where JS is available. -->
+  <link rel="canonical" href="https://chromewebstore.google.com/detail/dnidpjpakkallbhniigeiageaecnodck" />
+  <meta http-equiv="refresh" content="0; url=https://chromewebstore.google.com/detail/dnidpjpakkallbhniigeiageaecnodck" />
+
+  <style>
+    :root { --bg: #f3f1e7; --card: #ffffff; --text: #20302a; --muted: #5f6b63;
+            --pine: #2f5d45; --pine-hover: #3a7254; --border: #e4dfd2; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+           background: var(--bg); color: var(--text); min-height: 100vh;
+           display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+            box-shadow: 0 4px 24px rgba(31,48,42,.08); padding: 40px 32px; max-width: 420px;
+            width: 100%; text-align: center; }
+    .logo { width: 84px; height: 84px; border-radius: 20px; }
+    h1 { font-size: 24px; margin-top: 18px; letter-spacing: -0.02em; }
+    p { color: var(--muted); margin-top: 8px; line-height: 1.5; }
+    .btn { display: inline-block; margin-top: 22px; padding: 13px 22px; border-radius: 12px;
+           background: var(--pine); color: #fff; text-decoration: none; font-weight: 700;
+           font-size: 15px; transition: background .15s ease; }
+    .btn:hover { background: var(--pine-hover); }
+    .redirect { margin-top: 18px; font-size: 13px; color: var(--muted); }
+    .redirect a { color: var(--pine); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <img class="logo" src="assets/icons/icon128.png" alt="DealScan logo" />
+    <h1>DealScan</h1>
+    <p>A Chrome extension that scores Facebook Marketplace deals using AI.</p>
+    <a class="btn" href="https://chromewebstore.google.com/detail/dnidpjpakkallbhniigeiageaecnodck">Add to Chrome →</a>
+    <p class="redirect">Taking you to the Chrome Web Store…<br />
+      Not redirected? <a href="https://chromewebstore.google.com/detail/dnidpjpakkallbhniigeiageaecnodck">Click here</a>.</p>
+  </main>
+
+  <script>
+    // Instant redirect where JavaScript is enabled.
+    window.location.replace("https://chromewebstore.google.com/detail/dnidpjpakkallbhniigeiageaecnodck");
+  </script>
+</body>
+</html>
