@@ -9,21 +9,23 @@
 <body>
   <header class="app-header">
     <span class="logo"><img src="../../assets/icons/icon48.png" alt="" class="logo-img" />DealScan</span>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="evaluate" role="tab">Evaluate</button>
-      <button class="tab" data-tab="history" role="tab">History</button>
-      <button class="tab" data-tab="watchlist" role="tab">Watchlist</button>
+    <nav class="tabs" role="tablist" aria-label="DealScan views">
+      <button class="tab active" id="tab-evaluate" data-tab="evaluate" role="tab"
+              aria-selected="true" aria-controls="view-evaluate" tabindex="0">Evaluate</button>
+      <button class="tab" id="tab-history" data-tab="history" role="tab"
+              aria-selected="false" aria-controls="view-history" tabindex="-1">History</button>
     </nav>
   </header>
 
   <!-- ============ EVALUATE TAB ============ -->
-  <main id="view-evaluate" class="view active">
+  <main id="view-evaluate" class="view active" role="tabpanel" aria-labelledby="tab-evaluate">
 
     <!-- State: not on a listing page -->
     <section id="state-idle" class="state hidden">
       <div class="empty-card">
         <p class="empty-icon">🛍️</p>
-        <p>Open a Facebook Marketplace listing, then click the
+        <p class="empty-title">No listing open</p>
+        <p class="empty-sub">Open a Facebook Marketplace listing, then hit the
           <strong>⚡ Evaluate Deal</strong> button on the page.</p>
       </div>
     </section>
@@ -31,7 +33,7 @@
     <!-- State: working -->
     <section id="state-loading" class="state hidden">
       <div class="empty-card">
-        <div class="spinner"></div>
+        <div class="spinner" role="status" aria-label="Working"></div>
         <p id="loading-label">Reading listing…</p>
       </div>
     </section>
@@ -40,8 +42,9 @@
     <section id="state-ready" class="state hidden">
       <div class="empty-card">
         <p class="empty-icon">⚡</p>
-        <p id="ready-title">Listing detected.</p>
-        <button id="btn-evaluate-now" class="btn btn-primary">Evaluate This Listing</button>
+        <p class="empty-title" id="ready-title">Listing detected</p>
+        <p class="empty-sub">Run the analysis whenever you're ready.</p>
+        <button id="btn-evaluate-now" class="btn btn-primary btn-block">Evaluate This Listing</button>
       </div>
     </section>
 
@@ -49,9 +52,10 @@
     <section id="state-unreliable" class="state hidden">
       <div class="empty-card">
         <p class="empty-icon">🔍</p>
-        <p>Couldn't read this listing reliably, so DealScan didn't evaluate it
-          (no charge). Refresh the listing and try again.</p>
-        <button id="btn-reload" class="btn btn-primary">Try Again</button>
+        <p class="empty-title">Couldn't read this listing</p>
+        <p class="empty-sub">DealScan didn't evaluate it, so there's no charge.
+          Refresh the listing and try again.</p>
+        <button id="btn-reload" class="btn btn-primary btn-block">Try Again</button>
       </div>
     </section>
 
@@ -59,8 +63,9 @@
     <section id="state-error" class="state hidden">
       <div class="empty-card error-card">
         <p class="empty-icon">⚠️</p>
-        <p id="error-message">Something went wrong.</p>
-        <button id="btn-retry" class="btn btn-primary">Try Again</button>
+        <p class="empty-title">Something went wrong</p>
+        <p id="error-message" class="empty-sub">Something went wrong.</p>
+        <button id="btn-retry" class="btn btn-primary btn-block">Try Again</button>
       </div>
     </section>
 
@@ -76,10 +81,11 @@
       </div>
 
       <div class="verdict-hero">
-        <svg class="score-ring" viewBox="0 0 120 120" width="110" height="110">
+        <svg class="score-ring" viewBox="0 0 120 120" width="124" height="124"
+             role="img" id="score-ring" aria-label="Deal score">
           <circle class="ring-track" cx="60" cy="60" r="52" />
           <circle id="ring-fill" class="ring-fill" cx="60" cy="60" r="52" />
-          <text id="ring-score" x="60" y="58" text-anchor="middle">–</text>
+          <text id="ring-score" x="60" y="57" text-anchor="middle">–</text>
           <text x="60" y="76" text-anchor="middle" class="ring-sub">/ 100</text>
         </svg>
         <div class="verdict-text">
@@ -99,26 +105,19 @@
 
       <div class="action-row">
         <button id="btn-save" class="btn btn-primary">💾 Save</button>
-        <button id="btn-watch" class="btn">👁️ Watchlist</button>
-        <button id="btn-reevaluate" class="btn btn-ghost" title="Re-run (spends API credit)">↻</button>
+        <button id="btn-reevaluate" class="btn btn-ghost" aria-label="Re-run evaluation (spends API credit)" title="Re-run (spends API credit)">↻</button>
       </div>
     </section>
   </main>
 
   <!-- ============ HISTORY TAB ============ -->
-  <main id="view-history" class="view">
+  <main id="view-history" class="view" role="tabpanel" aria-labelledby="tab-history" hidden>
     <div class="list-controls">
-      <input id="history-search" type="search" placeholder="Search history…" />
-      <select id="history-filter"><option value="">All categories</option></select>
+      <input id="history-search" type="search" placeholder="Search history…" aria-label="Search history" />
+      <select id="history-filter" aria-label="Filter by category"><option value="">All categories</option></select>
     </div>
     <ul id="history-list" class="card-list"></ul>
     <p id="history-empty" class="list-empty hidden">No saved evaluations yet. Hit <strong>Save</strong> after evaluating a listing.</p>
-  </main>
-
-  <!-- ============ WATCHLIST TAB ============ -->
-  <main id="view-watchlist" class="view">
-    <ul id="watchlist-list" class="card-list"></ul>
-    <p id="watchlist-empty" class="list-empty hidden">Nothing on your watchlist yet.</p>
   </main>
 
   <script type="module" src="sidepanel.js"></script>

@@ -17,9 +17,7 @@ import {
   getHistory,
   addToHistory,
   removeFromHistory,
-  getWatchlist,
-  addToWatchlist,
-  removeFromWatchlist,
+  isInHistory,
 } from "../shared/storage.js";
 
 const LISTING_URL_RE = /facebook\.com\/marketplace\/item\//;
@@ -27,7 +25,7 @@ const RING_CIRCUMFERENCE = 327; // 2πr, r=52 — matches the CSS dasharray
 
 const $ = (id) => document.getElementById(id);
 
-// What the Save / Watchlist buttons act on.
+// What the Save button acts on.
 let current = { listing: null, verdict: null };
 
 // ---------- Boot ----------------------------------------------------------------
@@ -71,16 +69,40 @@ chrome.runtime.onMessage.addListener((message) => {
 // ---------- Tabs -----------------------------------------------------------------
 
 function bindTabs() {
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-      tab.classList.add("active");
-      $(`view-${tab.dataset.tab}`).classList.add("active");
-      if (tab.dataset.tab === "history") renderHistory();
-      if (tab.dataset.tab === "watchlist") renderWatchlist();
+  const tabs = [...document.querySelectorAll(".tab")];
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => activateTab(tab));
+    // Arrow-key navigation between tabs (WAI-ARIA tablist pattern).
+    tab.addEventListener("keydown", (e) => {
+      const i = tabs.indexOf(tab);
+      let next = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") next = tabs[(i + 1) % tabs.length];
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = tabs[(i - 1 + tabs.length) % tabs.length];
+      else if (e.key === "Home") next = tabs[0];
+      else if (e.key === "End") next = tabs[tabs.length - 1];
+      if (next) {
+        e.preventDefault();
+        activateTab(next);
+        next.focus();
+      }
     });
   });
+}
+
+function activateTab(tab) {
+  document.querySelectorAll(".tab").forEach((t) => {
+    const on = t === tab;
+    t.classList.toggle("active", on);
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll(".view").forEach((v) => {
+    const on = v.id === `view-${tab.dataset.tab}`;
+    v.classList.toggle("active", on);
+    v.hidden = !on;
+  });
+  if (tab.dataset.tab === "history") renderHistory();
 }
 
 function bindActions() {
@@ -91,14 +113,8 @@ function bindActions() {
 
   $("btn-save").addEventListener("click", async () => {
     if (!current.verdict) return;
-    await addToHistory(historyEntry());
-    flashButton($("btn-save"), "✓ Saved");
-  });
-
-  $("btn-watch").addEventListener("click", async () => {
-    if (!current.verdict) return;
-    await addToWatchlist(historyEntry());
-    flashButton($("btn-watch"), "✓ Watching");
+    await addToHistory(historyEntry()); // dedupes by URL — safe to click twice
+    setSaved(true);
   });
 
   $("history-search").addEventListener("input", renderHistory);
@@ -121,14 +137,17 @@ function historyEntry() {
   };
 }
 
-function flashButton(btn, label) {
-  const original = btn.textContent;
-  btn.textContent = label;
-  btn.disabled = true;
-  setTimeout(() => {
-    btn.textContent = original;
-    btn.disabled = false;
-  }, 1600);
+// Reflect whether the current listing is already in saved history, so the Save
+// button reads "✓ Saved" instead of inviting a redundant (harmless) re-save.
+function setSaved(saved) {
+  const btn = $("btn-save");
+  btn.textContent = saved ? "✓ Saved" : "💾 Save";
+  btn.disabled = saved;
+  btn.classList.toggle("is-saved", saved);
+}
+
+async function refreshSavedState(url) {
+  setSaved(await isInHistory(url));
 }
 
 // ---------- Evaluate flow ----------------------------------------------------------
@@ -147,7 +166,7 @@ async function previewActiveTab() {
       showState("unreliable");
       return;
     }
-    $("ready-title").textContent = `Listing detected: ${truncate(listing.title, 48)}`;
+    $("ready-title").textContent = truncate(listing.title, 60);
     showState("ready");
   } catch {
     showState("idle");
@@ -188,6 +207,7 @@ async function evaluateActiveTab({ force = false } = {}) {
     current.verdict = res.data;
     renderVerdict(listing, res.data);
     showState("verdict");
+    refreshSavedState(listing.url);
   } catch (err) {
     $("error-message").textContent = String(err.message ?? err);
     showState("error");
@@ -304,6 +324,13 @@ function renderVerdict(listing, v) {
   $("v-recommendation").textContent = v.recommendation ?? "—";
   $("v-summary").textContent = v.summary ?? "";
 
+  $("score-ring").setAttribute(
+    "aria-label",
+    score == null
+      ? "Deal score unavailable"
+      : `Deal score ${score} out of 100 — ${v.verdict ?? ""}`.trim()
+  );
+
   // Prices
   const cur = listing.currency;
   $("p-asking").textContent = formatMoney(v.askingPrice ?? listing.price, cur);
@@ -358,16 +385,7 @@ async function renderHistory() {
   );
 }
 
-// ---------- Watchlist tab ---------------------------------------------------------------
-
-async function renderWatchlist() {
-  const all = await getWatchlist();
-  renderCardList($("watchlist-list"), $("watchlist-empty"), all, (entry) =>
-    removeFromWatchlist(entry.id).then(renderWatchlist)
-  );
-}
-
-// Shared card renderer for both lists.
+// Renders the saved-history list.
 function renderCardList(listEl, emptyEl, entries, onRemove) {
   listEl.replaceChildren();
   emptyEl.classList.toggle("hidden", entries.length > 0);
@@ -394,7 +412,7 @@ function renderCardList(listEl, emptyEl, entries, onRemove) {
       formatMoney(entry.price, entry.currency ?? "$"),
       entry.verdict,
       categoryLabel(entry.category),
-      formatRelative(entry.savedAt ?? entry.addedAt),
+      formatRelative(entry.savedAt),
     ]
       .filter(Boolean)
       .join(" · ");

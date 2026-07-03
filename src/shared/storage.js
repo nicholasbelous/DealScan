@@ -1,14 +1,12 @@
 // chrome.storage.local wrapper for DealScan.
 //
 // Single source of truth for everything we persist: user settings (API keys,
-// model choice), saved deal history, and the watchlist. Keeping all reads and
-// writes here means the rest of the extension never touches chrome.storage
-// keys directly.
+// model choice) and saved deal history. Keeping all reads and writes here means
+// the rest of the extension never touches chrome.storage keys directly.
 
 const KEYS = {
   settings: "settings",
   history: "history",
-  watchlist: "watchlist",
 };
 
 const DEFAULT_SETTINGS = {
@@ -44,11 +42,19 @@ export async function getHistory() {
 
 export async function addToHistory(entry) {
   const history = await getHistory();
-  // Prepend newest-first; stamp an id + timestamp for sorting/dedup.
+  // Dedup by listing URL: re-saving the same listing replaces the old entry
+  // (with the fresh verdict) rather than piling up duplicates.
+  const without = entry.url ? history.filter((h) => h.url !== entry.url) : history;
   const record = { id: crypto.randomUUID(), savedAt: Date.now(), ...entry };
-  history.unshift(record);
-  await set(KEYS.history, history);
+  without.unshift(record);
+  await set(KEYS.history, without);
   return record;
+}
+
+export async function isInHistory(url) {
+  if (!url) return false;
+  const history = await getHistory();
+  return history.some((h) => h.url === url);
 }
 
 export async function removeFromHistory(id) {
@@ -58,27 +64,6 @@ export async function removeFromHistory(id) {
 
 export async function clearHistory() {
   await set(KEYS.history, []);
-}
-
-// --- Watchlist ---------------------------------------------------------------
-
-export async function getWatchlist() {
-  return (await get(KEYS.watchlist)) || [];
-}
-
-export async function addToWatchlist(entry) {
-  const watchlist = await getWatchlist();
-  // Dedup by listing URL so re-adding the same item updates it in place.
-  const without = watchlist.filter((w) => w.url !== entry.url);
-  const record = { id: crypto.randomUUID(), addedAt: Date.now(), ...entry };
-  without.unshift(record);
-  await set(KEYS.watchlist, without);
-  return record;
-}
-
-export async function removeFromWatchlist(id) {
-  const watchlist = await getWatchlist();
-  await set(KEYS.watchlist, watchlist.filter((w) => w.id !== id));
 }
 
 // --- Low-level chrome.storage.local helpers ----------------------------------
