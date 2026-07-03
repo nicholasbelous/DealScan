@@ -16,6 +16,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("toggle-key").addEventListener("click", toggleKeyVisibility);
   $("btn-export").addEventListener("click", exportHistory);
   $("btn-clear").addEventListener("click", clearAllHistory);
+
+  $("version-label").textContent = `DealScan v${chrome.runtime.getManifest().version}`;
 });
 
 async function save() {
