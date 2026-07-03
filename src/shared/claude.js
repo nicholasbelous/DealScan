@@ -120,7 +120,71 @@ export async function evaluateListing(listing, images = []) {
     }
   }
 
-  return parseVerdict(response);
+  return finalizeVerdict(parseVerdict(response), listing);
+}
+
+// Make the verdict trustworthy and self-consistent — never rely on the model
+// for arithmetic or for keeping its own fields in agreement:
+//   • asking price comes from the actual scrape, not the model's echo
+//   • savingsPercent is computed in code (asking vs market midpoint)
+//   • the rating label is derived from the score, so they can't contradict
+//   • all numerics are coerced/clamped; an inverted market range is corrected
+function finalizeVerdict(v, listing) {
+  const num = (x) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  v.score = clampScore(num(v.score));
+  v.marketLow = num(v.marketLow);
+  v.marketHigh = num(v.marketHigh);
+  v.suggestedOffer = num(v.suggestedOffer);
+
+  // The asking price is known from the scrape — authoritative over the model.
+  v.askingPrice = listing.price ?? num(v.askingPrice);
+
+  // Correct an inverted market range.
+  if (v.marketLow != null && v.marketHigh != null && v.marketLow > v.marketHigh) {
+    [v.marketLow, v.marketHigh] = [v.marketHigh, v.marketLow];
+  }
+
+  // Derive savingsPercent ourselves: asking vs market midpoint. Positive =
+  // below market (a deal), negative = above (overpriced).
+  if (v.askingPrice != null && v.marketLow != null && v.marketHigh != null) {
+    const mid = (v.marketLow + v.marketHigh) / 2;
+    v.savingsPercent = mid > 0 ? Math.round(((mid - v.askingPrice) / mid) * 100) : num(v.savingsPercent);
+  } else {
+    v.savingsPercent = num(v.savingsPercent);
+  }
+
+  // A suggested offer above the asking price makes no sense.
+  if (v.suggestedOffer != null && v.askingPrice != null && v.suggestedOffer > v.askingPrice) {
+    v.suggestedOffer = v.askingPrice;
+  }
+
+  // Keep the rating label in lockstep with the score.
+  if (v.score != null) v.verdict = verdictForScore(v.score);
+
+  return v;
+}
+
+const VERDICT_BANDS = [
+  [85, "Great Deal"],
+  [70, "Good Deal"],
+  [50, "Fair"],
+  [30, "Overpriced"],
+  [0, "Avoid"],
+];
+
+function verdictForScore(score) {
+  for (const [min, label] of VERDICT_BANDS) {
+    if (score >= min) return label;
+  }
+  return "Avoid";
+}
+
+function clampScore(n) {
+  return n == null ? null : Math.max(0, Math.min(100, Math.round(n)));
 }
 
 // --- Internals ---------------------------------------------------------------
@@ -166,10 +230,12 @@ function buildListingText(listing, imageCount) {
   return lines.join("\n");
 }
 
-async function callMessages({ apiKey, model, messages, useWebSearch }) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+// Transient failures worth retrying: rate limits, server errors, and
+// Anthropic's "overloaded" (529). A timeout (AbortError) is NOT retried.
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 529]);
+const MAX_RETRIES = 2;
 
+async function callMessages({ apiKey, model, messages, useWebSearch }) {
   const resolvedModel = model || DEFAULT_MODEL;
   const body = {
     model: resolvedModel,
@@ -187,34 +253,62 @@ async function callMessages({ apiKey, model, messages, useWebSearch }) {
   if (EFFORT_MODELS.test(resolvedModel)) {
     body.output_config = { effort: "medium" };
   }
+  const payload = JSON.stringify(body);
 
-  let res;
-  try {
-    res = await fetch(API_URL, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": API_VERSION,
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error("Evaluation timed out after 90s — try again.");
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let res = null;
+    let networkErr = null;
+    try {
+      res = await fetch(API_URL, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": API_VERSION,
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: payload,
+      });
+    } catch (err) {
+      networkErr = err;
+    } finally {
+      clearTimeout(timer);
     }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
 
-  if (!res.ok) {
+    if (networkErr) {
+      if (networkErr.name === "AbortError") {
+        throw new Error("Evaluation timed out after 90s — try again.");
+      }
+      if (attempt < MAX_RETRIES) {
+        await sleep(backoffMs(attempt));
+        continue;
+      }
+      throw new Error("Couldn't reach Anthropic — check your connection and retry.");
+    }
+
+    if (res.ok) return res.json();
+
     const text = await res.text().catch(() => "");
+    if (RETRYABLE_STATUS.has(res.status) && attempt < MAX_RETRIES) {
+      await sleep(retryDelayMs(attempt, res.headers, text));
+      continue;
+    }
     throw new Error(`Anthropic API ${res.status}: ${friendlyApiError(res.status, text)}`);
   }
-  return res.json();
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const backoffMs = (attempt) => 1000 * 2 ** attempt; // 1s, 2s
+
+function retryDelayMs(attempt, headers, _body) {
+  const retryAfter = Number(headers?.get?.("retry-after"));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter * 1000, 10000);
+  }
+  return backoffMs(attempt);
 }
 
 function friendlyApiError(status, body) {

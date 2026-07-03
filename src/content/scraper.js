@@ -345,14 +345,25 @@
     return t;
   }
 
+  // Facebook's full DOM has thousands of span/div nodes; scanning it on every
+  // settle-loop read is slow. Search the listing's main region first and only
+  // fall back to the whole document if needed — fast in the common case,
+  // still correct if FB nests the content elsewhere.
+  function searchRoots() {
+    const main = document.querySelector('div[role="main"]');
+    return main ? [main, document] : [document];
+  }
+
   function findElementByText(text) {
     const target = normalizeText(text);
-    for (const el of document.querySelectorAll('h1, h2, [role="heading"]')) {
-      if (normalizeText(el.textContent) === target) return el;
-    }
-    // Leaf-ish element exactly matching (FB often renders the title in a span).
-    for (const el of document.querySelectorAll("span, div")) {
-      if (el.childElementCount <= 1 && normalizeText(el.textContent) === target) return el;
+    for (const root of searchRoots()) {
+      for (const el of root.querySelectorAll('h1, h2, [role="heading"]')) {
+        if (normalizeText(el.textContent) === target) return el;
+      }
+      // Leaf-ish element exactly matching (FB often renders the title in a span).
+      for (const el of root.querySelectorAll("span, div")) {
+        if (el.childElementCount <= 1 && normalizeText(el.textContent) === target) return el;
+      }
     }
     return null;
   }
@@ -387,15 +398,17 @@
   }
 
   function labeledValueDom(label) {
-    for (const el of document.querySelectorAll("span, div")) {
-      const t = el.textContent?.trim() ?? "";
-      if (
-        el.childElementCount <= 2 &&
-        t.startsWith(label) &&
-        t.length < 80 &&
-        t.length > label.length
-      ) {
-        return t.slice(label.length).replace(/^[\s:·–-]+/, "").trim() || null;
+    for (const root of searchRoots()) {
+      for (const el of root.querySelectorAll("span, div")) {
+        const t = el.textContent?.trim() ?? "";
+        if (
+          el.childElementCount <= 2 &&
+          t.startsWith(label) &&
+          t.length < 80 &&
+          t.length > label.length
+        ) {
+          return t.slice(label.length).replace(/^[\s:·–-]+/, "").trim() || null;
+        }
       }
     }
     return null;
@@ -410,21 +423,24 @@
   // ~150px, real listing photos 350px+). Best-effort fallback when JSON/meta
   // photos aren't available; the service worker also drops tiny files.
   function domImages() {
-    const candidates = [...document.querySelectorAll("img")]
-      .map((img) => ({
-        src: img.currentSrc || img.src || "",
-        area: (img.naturalWidth || 0) * (img.naturalHeight || 0),
-        w: img.naturalWidth || 0,
-      }))
-      .filter((c) => /scontent|fbcdn/.test(c.src) && c.w >= 350)
-      .sort((a, b) => b.area - a.area);
+    for (const root of searchRoots()) {
+      const candidates = [...root.querySelectorAll("img")]
+        .map((img) => ({
+          src: img.currentSrc || img.src || "",
+          area: (img.naturalWidth || 0) * (img.naturalHeight || 0),
+          w: img.naturalWidth || 0,
+        }))
+        .filter((c) => /scontent|fbcdn/.test(c.src) && c.w >= 350)
+        .sort((a, b) => b.area - a.area);
 
-    const urls = [];
-    for (const c of candidates) {
-      if (c.src && !urls.includes(c.src)) urls.push(c.src);
-      if (urls.length >= 3) break;
+      const urls = [];
+      for (const c of candidates) {
+        if (c.src && !urls.includes(c.src)) urls.push(c.src);
+        if (urls.length >= 3) break;
+      }
+      if (urls.length > 0) return urls;
     }
-    return urls;
+    return [];
   }
 
   function longestDetailText() {
