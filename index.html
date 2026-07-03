@@ -5,11 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DealScan — Marketplace Deal Evaluator</title>
   <meta name="description" content="A Chrome extension that scores Facebook Marketplace deals using AI." />
+  <link rel="canonical" href="https://nicholasbelous.github.io/DealScan/" />
 
-  <!-- Redirect to the Chrome Web Store listing. Meta refresh works without JS;
-       the script below makes it instant where JS is available. -->
-  <link rel="canonical" href="https://chromewebstore.google.com/detail/dnidpjpakkallbhniigeiageaecnodck" />
-  <meta http-equiv="refresh" content="0; url=https://chromewebstore.google.com/detail/dnidpjpakkallbhniigeiageaecnodck" />
+  <!-- Open Graph / Twitter tags so link-preview crawlers (LinkedIn, etc.) can
+       build a rich card. We intentionally redirect with JavaScript only (below)
+       rather than a meta refresh: crawlers don't run JS, so they read THIS page
+       and its preview data, while real visitors are forwarded to the store. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="DealScan — Marketplace Deal Evaluator" />
+  <meta property="og:description" content="A Chrome extension that scores Facebook Marketplace deals using AI." />
+  <meta property="og:url" content="https://nicholasbelous.github.io/DealScan/" />
+  <meta property="og:image" content="https://nicholasbelous.github.io/DealScan/store-assets/screenshots/01-verdict-hero.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="DealScan — Marketplace Deal Evaluator" />
+  <meta name="twitter:description" content="A Chrome extension that scores Facebook Marketplace deals using AI." />
+  <meta name="twitter:image" content="https://nicholasbelous.github.io/DealScan/store-assets/screenshots/01-verdict-hero.png" />
 
   <style>
     :root { --bg: #f3f1e7; --card: #ffffff; --text: #20302a; --muted: #5f6b63;
