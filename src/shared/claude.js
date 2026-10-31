@@ -305,7 +305,7 @@ async function callMessages({ apiKey, model, messages, useWebSearch }) {
 
     const text = await res.text().catch(() => "");
     if (RETRYABLE_STATUS.has(res.status) && attempt < MAX_RETRIES) {
-      await sleep(retryDelayMs(attempt, res.headers, text));
+      await sleep(retryDelayMs(attempt, res.headers));
       continue;
     }
     throw new Error(`Anthropic API ${res.status}: ${friendlyApiError(res.status, text)}`);
@@ -315,7 +315,7 @@ async function callMessages({ apiKey, model, messages, useWebSearch }) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const backoffMs = (attempt) => 1000 * 2 ** attempt; // 1s, 2s
 
-function retryDelayMs(attempt, headers, _body) {
+function retryDelayMs(attempt, headers) {
   const retryAfter = Number(headers?.get?.("retry-after"));
   if (Number.isFinite(retryAfter) && retryAfter > 0) {
     return Math.min(retryAfter * 1000, 10000);

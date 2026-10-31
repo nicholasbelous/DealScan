@@ -23,18 +23,8 @@ const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", 
 
 // --- Side panel opening --------------------------------------------------------
 
-chrome.action.onClicked.addListener(async (tab) => {
-  if (tab?.windowId != null) {
-    await chrome.sidePanel.open({ windowId: tab.windowId });
-  }
-});
-
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch(() => {
-      /* older Chrome without setPanelBehavior — onClicked handler covers it */
-    });
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 });
 
 // --- Message router ------------------------------------------------------------
@@ -65,10 +55,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then((result) => sendResponse({ ok: true, data: result }))
         .catch((err) => sendResponse({ ok: false, error: String(err.message ?? err) }));
       return true;
-
-    case "PING":
-      sendResponse({ ok: true, data: "pong" });
-      return false;
 
     default:
       // LISTING_CHANGED etc. are consumed by the side panel directly.

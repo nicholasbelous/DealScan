@@ -1,5 +1,4 @@
-# Secrets — never commit real keys. .env.example (the placeholder template) is
-# intentionally NOT ignored so others know what keys are needed.
+# Secrets — never commit real keys.
 .env
 .env.local
 .env.*.local

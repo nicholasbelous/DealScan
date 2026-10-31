@@ -7,7 +7,7 @@ export function formatMoney(amount, currency = "$") {
 }
 
 /** Timestamp → "Jun 10" this year, "Jun 10, 2025" otherwise. */
-export function formatDate(timestamp) {
+function formatDate(timestamp) {
   if (!timestamp) return "—";
   const d = new Date(timestamp);
   const opts = { month: "short", day: "numeric" };

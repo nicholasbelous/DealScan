@@ -21,7 +21,7 @@
   <main id="view-evaluate" class="view active" role="tabpanel" aria-labelledby="tab-evaluate">
 
     <!-- State: not on a listing page -->
-    <section id="state-idle" class="state hidden">
+    <section id="state-idle" class="hidden">
       <div class="empty-card">
         <p class="empty-icon">🛍️</p>
         <p class="empty-title">No listing open</p>
@@ -31,7 +31,7 @@
     </section>
 
     <!-- State: working -->
-    <section id="state-loading" class="state hidden">
+    <section id="state-loading" class="hidden">
       <div class="empty-card">
         <div class="spinner" role="status" aria-label="Working"></div>
         <p id="loading-label">Reading listing…</p>
@@ -39,7 +39,7 @@
     </section>
 
     <!-- State: a listing is detected, ready to evaluate on click (no spend) -->
-    <section id="state-ready" class="state hidden">
+    <section id="state-ready" class="hidden">
       <div class="empty-card">
         <p class="empty-icon">⚡</p>
         <p class="empty-title" id="ready-title">Listing detected</p>
@@ -49,7 +49,7 @@
     </section>
 
     <!-- State: couldn't read listing reliably (refuse, no spend) -->
-    <section id="state-unreliable" class="state hidden">
+    <section id="state-unreliable" class="hidden">
       <div class="empty-card">
         <p class="empty-icon">🔍</p>
         <p class="empty-title">Couldn't read this listing</p>
@@ -60,7 +60,7 @@
     </section>
 
     <!-- State: error -->
-    <section id="state-error" class="state hidden">
+    <section id="state-error" class="hidden">
       <div class="empty-card error-card">
         <p class="empty-icon">⚠️</p>
         <p class="empty-title">Something went wrong</p>
@@ -70,7 +70,7 @@
     </section>
 
     <!-- State: verdict (bare essentials) -->
-    <section id="state-verdict" class="state hidden">
+    <section id="state-verdict" class="hidden">
       <div class="listing-summary">
         <h2 id="v-title">Listing title</h2>
         <p class="listing-meta">

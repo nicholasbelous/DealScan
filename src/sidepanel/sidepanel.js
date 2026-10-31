@@ -311,7 +311,7 @@ function renderVerdict(listing, v) {
   $("v-cached").classList.toggle("hidden", !v.fromCache);
 
   // Score ring
-  const score = clampScore(v.score);
+  const score = v.score; // already clamped in claude.js (null when unknown)
   const color = scoreColor(score);
   const ring = $("ring-fill");
   ring.style.stroke = color;
@@ -352,11 +352,6 @@ function renderVerdict(listing, v) {
     savingsEl.textContent = "—";
     savingsEl.style.color = "";
   }
-}
-
-function clampScore(score) {
-  const n = Number(score);
-  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null;
 }
 
 // ---------- History tab ---------------------------------------------------------------

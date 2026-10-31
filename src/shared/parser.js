@@ -26,8 +26,6 @@ export function parseListing(raw) {
 
   return {
     url: stripTracking(raw.url),
-    itemId: raw.itemId ?? null,
-    scrapedAt: raw.scrapedAt ?? Date.now(),
     reliable,
     title: title ?? "(untitled listing)",
     price: priceNumber,
@@ -36,7 +34,6 @@ export function parseListing(raw) {
     condition: cleanText(raw.condition),
     description,
     location: cleanText(raw.location),
-    seller: cleanText(raw.seller),
     attributes: cleanAttributes(raw.attributes),
     images: Array.isArray(raw.images) ? raw.images.filter(isHttpUrl) : [],
     category: detectCategory(`${title ?? ""} ${description ?? ""}`),
@@ -44,7 +41,7 @@ export function parseListing(raw) {
 }
 
 /** "$1,234.56" → 1234.56. Returns null when unparseable. */
-export function parsePrice(text) {
+function parsePrice(text) {
   if (text == null) return null;
   const m = String(text).match(/[\d,]+(?:\.\d{1,2})?/);
   if (!m) return null;
@@ -53,21 +50,21 @@ export function parsePrice(text) {
 }
 
 /** Extract the currency symbol from a raw price string. Defaults to "$". */
-export function parseCurrency(text) {
+function parseCurrency(text) {
   if (!text) return "$";
   const m = String(text).match(/CA\$|A\$|[$£€]/);
   return m ? m[0] : "$";
 }
 
 /** Collapse whitespace; return null for empty/junk values. */
-export function cleanText(text) {
+function cleanText(text) {
   if (typeof text !== "string") return null;
   const cleaned = text.replace(/\s+/g, " ").trim();
   return cleaned.length > 0 ? cleaned : null;
 }
 
 /** Drop query params/fragments so the same listing always has the same URL key. */
-export function stripTracking(url) {
+function stripTracking(url) {
   if (!url) return null;
   try {
     const u = new URL(url);

@@ -91,8 +91,6 @@
 
     const data = {
       url: location.href,
-      itemId,
-      scrapedAt: Date.now(),
       confidence,
       verified,
       transitioning,
@@ -101,7 +99,6 @@
       description: pick("description"),
       condition: pick("condition"),
       location: pick("location"),
-      seller: pick("seller"),
       attributes,
       images: mergeImages(),
     };
@@ -138,7 +135,6 @@
       description: node.redacted_description?.text ?? null,
       condition: conditionText(node),
       location: locationText(node),
-      seller: sellerName(node),
       images: collectImageUrls(node),
     };
   }
@@ -227,15 +223,6 @@
     return null;
   }
 
-  function sellerName(node) {
-    return (
-      node.marketplace_listing_seller?.name ??
-      node.story?.actors?.[0]?.name ??
-      node.seller?.name ??
-      null
-    );
-  }
-
   // ONLY the listing's real photos, from FB's canonical photo fields, in order.
   // We never scavenge arbitrary image URLs (avatars/icons/blur thumbs read as
   // "placeholder images" and poison the evaluation).
@@ -282,7 +269,6 @@
       description: metaContent("og:description"),
       condition: null,
       location: null,
-      seller: null,
       images: image && /^https:\/\//.test(image) ? [image] : [],
     };
   }
@@ -320,7 +306,6 @@
       description: longestDetailText(),
       condition: labeledValueDom("Condition"),
       location: locationFromDom(),
-      seller: null,
       // Deliberately NO images from the DOM. On a real listing page the biggest
       // <img> elements are just as often ads, "more like this" thumbnails, or
       // banners (a Chevy ad, stock scenery, etc.) as the listing's own photos —
