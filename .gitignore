@@ -28,6 +28,6 @@ Thumbs.db
 # Test coverage
 coverage/
 
-# Local AI assistant context (kept out of the published repo)
-CLAUDE.md
+# Local AI assistant context: private notes and settings (CLAUDE.md is tracked)
+CLAUDE.local.md
 .claude/
