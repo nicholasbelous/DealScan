@@ -99,7 +99,12 @@ There is no build step and there are no dependencies.
 manifest.json
 src/
   background/service-worker.js   message routing, photo downloads, result cache
-  content/scraper.js             reads the listing
+  content/scraper.js             combines the sources below into one read
+  content/source-embedded.js     source: embedded page JSON
+  content/source-panel.js        source: the verified listing panel
+  content/source-page.js         source: the page itself, fills gaps only
+  content/fields.js              condition, location, description, vehicle facts
+  content/page-text.js           price shapes, page title, finding text
   content/injector.js            floating Evaluate Deal button
   content/observer.js            detects navigation between listings
   sidepanel/                     Evaluate and History tabs
@@ -110,7 +115,9 @@ src/
   shared/prompt.js               the system prompt and listing text
   shared/verdict.js              output schema, validation, finalizeVerdict
   shared/pricing.js              price table and cost calculation
-  shared/parser.js               normalizes the scrape, decides if it is usable
+  shared/gate.js                 the reliability gate: can this read be trusted
+  shared/parser.js               normalizes the scrape into a listing
+  shared/normalize.js            price and text cleanup
   shared/storage.js              settings and history in chrome.storage.local
   shared/categories.js           keyword-based category detection
   shared/formatter.js            display helpers

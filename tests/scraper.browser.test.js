@@ -29,7 +29,12 @@ const CHROME = (
       ]
 ).find((p) => fs.existsSync(p));
 
-const scraperSource = fs.readFileSync(new URL("../src/content/scraper.js", import.meta.url), "utf8");
+// The real content scripts, in manifest order, minus the two with side effects.
+const manifest = JSON.parse(fs.readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
+const scraperSource = manifest.content_scripts[0].js
+  .filter((file) => !/injector|observer/.test(file))
+  .map((file) => fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8"))
+  .join("\n");
 
 const sellerLink = (id) => `<a href="/marketplace/profile/${SELLER}/?product_id=${id}">Seller</a>`;
 const feedCard = (id, title, price, extra = "") =>

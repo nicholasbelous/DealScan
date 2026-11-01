@@ -31,6 +31,11 @@
     {
       "matches": ["https://*.facebook.com/*"],
       "js": [
+        "src/content/page-text.js",
+        "src/content/fields.js",
+        "src/content/source-embedded.js",
+        "src/content/source-panel.js",
+        "src/content/source-page.js",
         "src/content/scraper.js",
         "src/content/injector.js",
         "src/content/observer.js"

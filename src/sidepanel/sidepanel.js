@@ -5,7 +5,8 @@
 // (show a notice, spend nothing). Otherwise hand off to the service worker,
 // which fetches photos and runs the Claude evaluation, then render the verdict.
 
-import { parseListing, checkRead } from "../shared/parser.js";
+import { checkRead } from "../shared/gate.js";
+import { parseListing } from "../shared/parser.js";
 import { summarizeCost } from "../shared/stats.js";
 import { toHistoryEntry } from "../shared/verdict.js";
 import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
@@ -254,11 +255,7 @@ async function sendToTab(tabId, message) {
     // and retry.
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: [
-        "src/content/scraper.js",
-        "src/content/injector.js",
-        "src/content/observer.js",
-      ],
+      files: chrome.runtime.getManifest().content_scripts[0].js,
     });
     return sendMessageOnce(tabId, message);
   }

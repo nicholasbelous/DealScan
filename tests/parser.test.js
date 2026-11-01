@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parsePrice, parseListing, checkRead, canReuseVerdict } from "../src/shared/parser.js";
+import { checkRead } from "../src/shared/gate.js";
+import { parsePrice } from "../src/shared/normalize.js";
+import { canReuseVerdict, parseListing } from "../src/shared/parser.js";
 
 const goodRead = (overrides = {}) => ({
   url: "https://www.facebook.com/marketplace/item/123/?ref=search",

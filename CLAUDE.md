@@ -132,10 +132,10 @@ Store the minimum needed. No seller names, no profile URLs, no raw page HTML.
 ## File Layout (target)
 ```
 src/background/   service-worker.js (message router, network calls, local cache)
-src/content/      scraper.js, injector.js (floating button), observer.js (SPA nav)
+src/content/      scraper.js + its sources and field extraction, injector.js (floating button), observer.js (SPA nav)
 src/sidepanel/    primary UI and state machine (Evaluate / History tabs)
 src/options/      mode, key or token, history export
-src/shared/       pure logic shared with the server: parser, prompt, schema, finalizeVerdict, cacheKey
+src/shared/       pure logic shared with the server: gate, parser, prompt, verdict validation and finalizeVerdict, pricing, stats, cacheKey
 server/           Fastify app, routes, db, migrations, stats page
 tests/            unit, scraper fixture, adversarial, and server tests
 tests/fixtures/   sanitized listing HTML
