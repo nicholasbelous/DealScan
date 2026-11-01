@@ -9,6 +9,7 @@
 //   4. Cache verdicts per listing URL so re-opening doesn't re-spend credit.
 
 import { evaluateListing } from "../shared/claude.js";
+import { canReuseVerdict } from "../shared/parser.js";
 import { getSettings } from "../shared/storage.js";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -72,13 +73,15 @@ async function handleEvaluate(listing, force) {
     throw new Error("Listing data could not be read reliably.");
   }
 
+  const { analyzeImages } = await getSettings();
+  const photosAvailable = analyzeImages && listing.images?.length > 0;
+
   const cacheKey = listing.url ? `verdict:${listing.url}` : null;
   if (cacheKey && !force) {
     const cached = await readCache(cacheKey);
-    if (cached) return { ...cached, fromCache: true };
+    if (cached && canReuseVerdict(cached, photosAvailable)) return { ...cached, fromCache: true };
   }
 
-  const { analyzeImages } = await getSettings();
   const images =
     analyzeImages && Array.isArray(listing.images) && listing.images.length > 0
       ? await fetchImages(listing.images)
@@ -86,6 +89,7 @@ async function handleEvaluate(listing, force) {
 
   const verdict = await evaluateListing(listing, images);
   verdict.imagesAnalyzed = images.length;
+  verdict.photoAnalysisOn = analyzeImages;
 
   if (cacheKey) await writeCache(cacheKey, verdict);
   return verdict;

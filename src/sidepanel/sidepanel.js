@@ -10,6 +10,7 @@ import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
 import {
   formatMoney,
   formatRelative,
+  noPhotosNotice,
   scoreColor,
   truncate,
 } from "../shared/formatter.js";
@@ -353,6 +354,10 @@ function renderVerdict(listing, v) {
   $("v-verdict").style.color = color;
   $("v-recommendation").textContent = v.recommendation ?? "—";
   $("v-summary").textContent = v.summary ?? "";
+
+  const notice = noPhotosNotice(v, listing.verifiedBy);
+  $("v-no-photos").textContent = notice ?? "";
+  $("v-no-photos").classList.toggle("hidden", !notice);
 
   $("score-ring").setAttribute(
     "aria-label",

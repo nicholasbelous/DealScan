@@ -207,6 +207,17 @@ body {
   font-size: 13.5px;
 }
 
+.verdict-notice {
+  margin-bottom: 16px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--fair) 45%, var(--border));
+  background: color-mix(in srgb, var(--fair) 12%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 /* ---------- Price grid ---------- */
 
 .price-grid {

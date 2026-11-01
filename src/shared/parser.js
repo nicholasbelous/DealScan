@@ -51,6 +51,14 @@ function itemIdFromUrl(url) {
 }
 
 /**
+ * Whether a cached verdict still applies. One made without photos doesn't when
+ * photos are now available, e.g. after a reload exposes the page's own data.
+ */
+export function canReuseVerdict(cached, photosAvailable) {
+  return !photosAvailable || cached.imagesAnalyzed > 0;
+}
+
+/**
  * Normalize a raw scraped listing.
  * @param {object} raw - output of scraper.js scrapeListing().
  * @returns {object} clean listing schema, including `reliable`.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parsePrice, parseListing, checkRead } from "../src/shared/parser.js";
+import { parsePrice, parseListing, checkRead, canReuseVerdict } from "../src/shared/parser.js";
 
 const goodRead = (overrides = {}) => ({
   url: "https://www.facebook.com/marketplace/item/123/?ref=search",
@@ -164,4 +164,16 @@ test("parseListing never includes seller fields", () => {
 
 test("parseListing throws when nothing was scraped", () => {
   assert.throws(() => parseListing(null), /Nothing scraped/);
+});
+
+// --- canReuseVerdict ----------------------------------------------------------
+
+test("a cached verdict without photos isn't reused once photos are available", () => {
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 0 }, true), false);
+});
+
+test("a cached verdict is reused when photos add nothing new", () => {
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 0 }, false), true);
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 2 }, true), true);
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 2 }, false), true);
 });

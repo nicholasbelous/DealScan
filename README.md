@@ -25,7 +25,7 @@ The gate prefers refusing to guessing. A panel read is rejected if the panel con
 
 Fields other than the title and price are not individually verified. After a panel read they come only from the panel. After a page JSON read, any the JSON lacks can come from the wider page, which is not tied to the item ID.
 
-Listings evaluated from a panel read have no photos.
+A panel read has no photos, so the same listing can get a different verdict depending on how you reached it. The result says when it was evaluated without photos. After a reload, if the page provides photos, evaluating again makes a new API call instead of reusing the cached result without photos.
 
 This logic is tested against fake pages in Chrome, not against saved Facebook HTML.
 

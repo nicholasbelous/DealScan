@@ -38,6 +38,14 @@ export function scoreColor(score) {
   return "var(--avoid)";
 }
 
+/** Why a verdict had no photos, or null if it had some. Only a panel read can gain them by reloading. */
+export function noPhotosNotice(verdict, verifiedBy) {
+  if (verdict.imagesAnalyzed > 0) return null;
+  if (verdict.photoAnalysisOn === false) return "Evaluated without photos: photo analysis is off in Options.";
+  if (verifiedBy === "panel_product_id") return "Evaluated without photos: reload to include them.";
+  return "Evaluated without photos: none could be loaded for this listing.";
+}
+
 /** Truncate long text with an ellipsis for table cells / cards. */
 export function truncate(text, max = 60) {
   if (!text) return "";
