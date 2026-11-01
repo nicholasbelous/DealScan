@@ -1,0 +1,4 @@
+item_id,title,my_price_low,my_price_high,readable,notes
+1000001,Fake Road Bike,150,250,true,"Fake row: replace with your own labels"
+1000002,"Fake Sofa, Grey",200,350,true,Fake row
+1000003,Fake Unreadable Listing,,,false,"Fake row: the page couldn't be read"

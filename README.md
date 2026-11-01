@@ -101,6 +101,22 @@ Cache entries last an hour by default (`CACHE_TTL_SECONDS`). The rate limit defa
 
 The budget check runs before each evaluation, so requests already in progress can take spending slightly past the cap.
 
+## Evaluation harness
+
+`eval/` measures how the model does against your own labels. It isn't part of `npm test`, and against the real API it costs money.
+
+```sh
+cp eval/labels.template.csv my-labels.csv   # the template holds fake rows: replace them
+npm run eval:import -- my-labels.csv
+npm run eval                  # shows the plan and stops
+npm run eval -- --mock        # a fake API: checks the pipeline, numbers mean nothing
+npm run eval -- --confirm-paid   # real API calls, needs ANTHROPIC_API_KEY
+```
+
+It reports the price-range hit rate (how often your range overlaps the model's), score variance (5 listings run 5 times each), rejection precision, and cost and latency median and p90, including retries. Results go to `eval/results/<date>-<prompt_version>.json`. No results from real runs exist yet, so this repo makes no accuracy claims. Mock results are marked and aren't committed.
+
+Limits: a label needs a listing already evaluated through the server, because the CSV has no asking price. Evaluations use stored text without photos, because the server keeps none. Rejection precision only covers rejected model answers, because the extension's gate rejections aren't recorded anywhere.
+
 ## Features
 
 - **History tab:** search saved evaluations by title, filter by category, open or remove them. Each saved entry also records the model, prompt version, token counts, web searches, attempts, latency, and cost calculated from the pricing table in `src/shared/pricing.js`. The History tab shows each entry's cost.
@@ -156,6 +172,7 @@ src/
   shared/categories.js           keyword-based category detection
   shared/formatter.js            display helpers
 server/                          optional backend: Fastify, SQLite, migrations
+eval/                            evaluation harness and labels template
 assets/icons/                    extension icons
 store-assets/                    Web Store images and source logo, not shipped
 index.html, privacy-policy.html  GitHub Pages site, served from the repo root

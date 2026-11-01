@@ -18,6 +18,9 @@ store-assets/screenshots/raw/
 # Server database
 server/data/
 
+# Mock eval runs: their numbers mean nothing
+eval/results/*-MOCK.json
+
 # Logs
 *.log
 npm-debug.log*

@@ -114,10 +114,10 @@ Store the minimum needed. No seller names, no profile URLs, no raw page HTML.
 - CI: GitHub Actions runs `npm test` on every push.
 
 ## Evaluation Harness (separate from tests, costs money, run manually)
-- `npm run eval` runs the labeled listings in `labels` through the current model and prompt version and reports:
+- `npm run eval` shows the plan and refuses to spend without `--confirm-paid`. `--mock` runs a fake API for free; mock results are marked and uncommitted, and can never back a claim. It runs the labeled listings in `labels` through the current model and prompt version and reports:
   - Price range hit rate: how often the human price range overlaps the model's range
   - Score variance: each of 5 listings run 5 times, report spread
-  - Rejection precision: of rejected reads, how many were actually unreadable
+  - Rejection precision: of rejected reads, how many were actually unreadable (today this covers rejected model answers only; gate rejections happen in the browser and aren't recorded)
   - Cost and latency median and p90
 - Write results to `eval/results/<date>-<prompt_version>.json`. Only these files may back any accuracy or cost claim in docs.
 

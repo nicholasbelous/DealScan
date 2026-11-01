@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "eval": "node eval/run.js",
+    "eval:import": "node eval/import-labels.js"
   },
   "workspaces": [
     "server"
