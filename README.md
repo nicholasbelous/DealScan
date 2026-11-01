@@ -113,14 +113,21 @@ There are no automated tests.
 - Your API key, settings, and saved history are stored in `chrome.storage.local`. They are not synced.
 - Cached results are kept in `chrome.storage.session`, which clears when the browser closes.
 - Listing data and your key are sent only to the Anthropic API. There is no DealScan server.
-- The content scripts load on all `facebook.com` pages so they can detect in-app navigation to a listing. The button only appears on listing pages.
+- The content scripts load on all `facebook.com` pages (see below). Outside listing pages they only watch the page address. The button only appears on listing pages, and the panel only reads listing pages.
+
+### Why the content scripts match all of facebook.com
+
+The manifest matches `https://*.facebook.com/*`, not just Marketplace. Chrome injects declared content scripts only on a full page load, and Facebook moves between pages without one. With a `/marketplace/*` match, a tab first loaded on the Facebook home page would get no scripts when you navigate in-app to a listing, so there would be no button and no navigation updates until you reload.
+
+This was checked with a small test extension and a local page in Chrome: after `/` to `/marketplace/` to `/marketplace/item/1/` using `history.pushState`, the script had not run until the page was reloaded. A tab first loaded on `/marketplace/` kept its script when moving to an item. It has not been tested on live Facebook.
+
+Narrowing the match would need the `webNavigation` permission and code that injects the scripts on navigation.
 
 ## Roadmap
 
 **None of this is built yet.**
 
 - Require a verified item ID before accepting a read
-- Narrow the content script match to Marketplace, if navigation detection allows it
 - Unit tests, scraper fixtures, and CI
 - Schema validation of model output with one retry, and delimiters around seller-written text
 - Usage data stored with each history entry

@@ -64,6 +64,7 @@ Content script (scraper)  ->  Service worker  ->  [direct mode] Anthropic API
                                                                    SQLite
 ```
 - Content scripts only read the page. They never call any API.
+- Content scripts match `https://*.facebook.com/*` on purpose. Chrome injects declared content scripts only on a full page load, not on `history.pushState`, and Facebook moves between pages in-app. With a `/marketplace/*` match, a tab first loaded elsewhere on Facebook gets no scripts when the user navigates in-app to a listing, so no button and no navigation updates until a reload. Checked with a test extension and a local page in Chrome, not on live Facebook. Outside item pages the scripts only watch the URL; the injector adds the button only on item pages and the panel only scrapes on item pages. Narrowing would need the `webNavigation` permission and programmatic injection, which is an architecture change: ask first.
 - The service worker owns all network calls and the local cache.
 - Pure logic (parsing, prompt building, validation, `finalizeVerdict`, cache keys) lives in `src/shared/` with no `chrome.*` calls, so the extension and the server import the same modules. One source of truth for validation.
 - Direct mode: user supplies their own Anthropic key (current published behavior). Calls use plain `fetch` with the `anthropic-dangerous-direct-browser-access` header.
@@ -120,7 +121,7 @@ Store the minimum needed. No seller names, no profile URLs, no raw page HTML.
 - Write results to `eval/results/<date>-<prompt_version>.json`. Only these files may back any accuracy or cost claim in docs.
 
 ## Roadmap (do in order)
-1. **Truth fixes.** Reliability gate requires a verified item ID. Remove stale docs (watchlist, eBay, nonexistent tests folder). Make README and privacy policy match the code. Narrow content script matches to Marketplace, or document exactly why a broader match is required for SPA navigation.
+1. **Truth fixes.** Reliability gate requires a verified item ID. Remove stale docs (watchlist, eBay, nonexistent tests folder). Make README and privacy policy match the code. Keep the content script match documented (see Architecture).
 2. **Tests and CI** for existing pure functions, plus scraper fixtures.
 3. **Validation and safety.** JSON schema validation with one retry, `finalizeVerdict` consistency, delimited seller text, adversarial tests. Store `usage` in history entries.
 4. **User flow.** Side panel state machine as specified above, results bound to item ID.
