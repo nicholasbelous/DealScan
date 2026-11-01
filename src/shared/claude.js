@@ -9,7 +9,8 @@
 //   - opt-in:  one web search for current prices (Options → Use web search)
 // An answer that fails validation gets one retry, then the listing is rejected.
 
-import { buildSystemPrompt, buildUserContent } from "./prompt.js";
+import { addUsage, costUsd, emptyUsage } from "./pricing.js";
+import { PROMPT_VERSION, buildSystemPrompt, buildUserContent } from "./prompt.js";
 import { getSettings } from "./storage.js";
 import {
   VERDICT_JSON_SCHEMA,
@@ -32,38 +33,57 @@ const MAX_EVALUATION_ATTEMPTS = 2; // the first try plus one retry on invalid ou
  * Evaluate a scraped listing.
  * @param {object} listing - normalized, reliable listing from the parser.
  * @param {Array<{media_type:string,data:string}>} [images] - base64 photos.
- * @returns {Promise<object>} a validated, finalized verdict.
+ * @returns {Promise<object>} a validated, finalized verdict, with an `evaluation`
+ *   record of what it took: model, prompt version, tokens, latency, and cost.
  * @throws {VerdictRejectedError} if no valid answer came back.
  */
 export async function evaluateListing(listing, images = []) {
-  const { anthropicKey, model, useWebSearch } = await getSettings();
+  const { anthropicKey, model: chosenModel, useWebSearch } = await getSettings();
   if (!anthropicKey) {
     throw new Error("No Anthropic API key set. Add one in the extension Options.");
   }
+  const model = chosenModel || DEFAULT_MODEL;
   const content = buildUserContent(listing, images);
+  const startedAt = Date.now();
 
+  let usage = emptyUsage();
   let result;
   for (let attempt = 1; attempt <= MAX_EVALUATION_ATTEMPTS; attempt++) {
-    const response = await runTurn({ apiKey: anthropicKey, model, useWebSearch, content, attempt });
-    result = readVerdict(response, listing);
-    if (result.ok) return finalizeVerdict(result.verdict, listing);
+    const opts = { apiKey: anthropicKey, model, useWebSearch, maxTokens: MAX_TOKENS * attempt };
+    const turn = await runTurn(opts, content, usage);
+    usage = turn.usage;
+
+    result = readVerdict(turn.response, listing);
+    if (result.ok) {
+      const evaluation = {
+        model,
+        promptVersion: PROMPT_VERSION,
+        ...usage,
+        attempts: attempt,
+        latencyMs: Date.now() - startedAt,
+        costUsd: costUsd(model, usage),
+      };
+      return { ...finalizeVerdict(result.verdict, listing), evaluation };
+    }
     if (!result.retryable) break;
   }
   throw new VerdictRejectedError(result.reason);
 }
 
 // One evaluation attempt. Only web search produces server-side pause_turn
-// continuations. A cut-off answer can't pass validation, so a retry gets more room.
-async function runTurn({ apiKey, model, useWebSearch, content, attempt }) {
+// continuations. A retry gets more max_tokens, since a cut-off answer can't
+// pass validation.
+async function runTurn(opts, content, usageSoFar) {
   const messages = [{ role: "user", content }];
-  const opts = { apiKey, model, useWebSearch, maxTokens: MAX_TOKENS * attempt };
 
   let response = await callMessages({ ...opts, messages });
-  for (let i = 0; useWebSearch && i < 2 && response.stop_reason === "pause_turn"; i++) {
+  let usage = addUsage(usageSoFar, response.usage);
+  for (let i = 0; opts.useWebSearch && i < 2 && response.stop_reason === "pause_turn"; i++) {
     messages.push({ role: "assistant", content: response.content });
     response = await callMessages({ ...opts, messages });
+    usage = addUsage(usage, response.usage);
   }
-  return response;
+  return { response, usage };
 }
 
 // Transient failures worth retrying: rate limits, server errors, and
@@ -72,9 +92,8 @@ const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 529]);
 const MAX_RETRIES = 2;
 
 async function callMessages({ apiKey, model, messages, useWebSearch, maxTokens }) {
-  const resolvedModel = model || DEFAULT_MODEL;
   const body = {
-    model: resolvedModel,
+    model,
     max_tokens: maxTokens,
     system: buildSystemPrompt(useWebSearch),
     messages,
@@ -88,7 +107,7 @@ async function callMessages({ apiKey, model, messages, useWebSearch, maxTokens }
     // citations as incompatible with a JSON format. Code validates both modes.
     outputConfig.format = { type: "json_schema", schema: VERDICT_JSON_SCHEMA };
   }
-  if (EFFORT_MODELS.test(resolvedModel)) outputConfig.effort = "medium";
+  if (EFFORT_MODELS.test(model)) outputConfig.effort = "medium";
   if (Object.keys(outputConfig).length > 0) body.output_config = outputConfig;
   const payload = JSON.stringify(body);
 

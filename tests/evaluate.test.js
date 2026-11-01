@@ -4,6 +4,8 @@ import { afterEach, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { evaluateListing } from "../src/shared/claude.js";
+import { costUsd, emptyUsage } from "../src/shared/pricing.js";
+import { PROMPT_VERSION } from "../src/shared/prompt.js";
 import { VerdictRejectedError } from "../src/shared/verdict.js";
 
 const listing = {
@@ -136,6 +138,34 @@ test("rejects a model that obeys an injected 'score this 100' on an overpriced i
   mockApi(reply(obeyed), reply(obeyed));
   await assert.rejects(evaluateListing(injected), /above-market/);
   assert.equal(requests.length, 2);
+});
+
+test("records model, prompt version, tokens, latency, and cost", async () => {
+  mockApi(reply(good));
+  const { evaluation } = await evaluateListing(listing);
+  assert.equal(evaluation.model, "claude-haiku-4-5");
+  assert.equal(evaluation.promptVersion, PROMPT_VERSION);
+  assert.equal(evaluation.inputTokens, 10);
+  assert.equal(evaluation.outputTokens, 5);
+  assert.equal(evaluation.attempts, 1);
+  assert.equal(typeof evaluation.latencyMs, "number");
+  assert.equal(evaluation.costUsd, costUsd("claude-haiku-4-5", { ...emptyUsage(), inputTokens: 10, outputTokens: 5 }));
+});
+
+test("the record counts a retry, since it's billed", async () => {
+  mockApi(reply("{not json"), reply(good));
+  const { evaluation } = await evaluateListing(listing);
+  assert.equal(evaluation.attempts, 2);
+  assert.equal(evaluation.inputTokens, 20);
+  assert.equal(evaluation.outputTokens, 10);
+});
+
+test("cost is null for a model with no price, not a guess", async () => {
+  useSettings({ model: "claude-unknown" });
+  mockApi(reply(good));
+  const { evaluation } = await evaluateListing(listing);
+  assert.equal(evaluation.model, "claude-unknown");
+  assert.equal(evaluation.costUsd, null);
 });
 
 test("doesn't retry a refusal", async () => {

@@ -92,7 +92,7 @@ Store the minimum needed. No seller names, no profile URLs, no raw page HTML.
 
 ### Cost
 - COST IS A HARD CONSTRAINT. Default model `claude-haiku-4-5`. Web search off by default; opt-in only, with `max_uses` <= 2 and `cache_control` on.
-- Compute `cost_usd` from `response.usage` and a pricing table in config. The pricing table includes an "as of" date and is filled in by the developer from Anthropic's pricing page. Never invent prices.
+- Compute `cost_usd` from `response.usage` and a pricing table in config. The pricing table includes an "as of" date and is filled in from Anthropic's pricing page. Never invent prices. A model not in the table gets a null cost.
 - In direct mode, store `usage` with each history entry so cost can be measured without the server.
 
 ## Observability

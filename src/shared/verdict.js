@@ -105,6 +105,23 @@ export function finalizeVerdict(v, listing) {
   };
 }
 
+/** What Save keeps: the result, plus the evaluation record for measuring cost. */
+export function toHistoryEntry(listing, verdict) {
+  return {
+    url: listing.url,
+    title: listing.title,
+    category: listing.category,
+    price: listing.price,
+    currency: listing.currency,
+    score: verdict.score,
+    verdict: verdict.verdict,
+    recommendation: verdict.recommendation,
+    suggestedOffer: verdict.suggestedOffer,
+    summary: verdict.summary,
+    evaluation: verdict.evaluation,
+  };
+}
+
 function verdictForScore(score) {
   return VERDICT_BANDS.find(([min]) => score >= min)[1];
 }

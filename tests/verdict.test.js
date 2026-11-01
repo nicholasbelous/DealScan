@@ -5,6 +5,7 @@ import {
   VERDICT_JSON_SCHEMA,
   finalizeVerdict,
   readVerdict,
+  toHistoryEntry,
   validateVerdict,
 } from "../src/shared/verdict.js";
 
@@ -167,4 +168,14 @@ test("doesn't change the verdict it was given", () => {
   const original = verdict({ suggestedOffer: 110 });
   finalizeVerdict(original, { price: 100 });
   assert.equal(original.suggestedOffer, 110);
+});
+
+// --- toHistoryEntry -----------------------------------------------------------
+
+test("a history entry keeps the evaluation record", () => {
+  const evaluation = { model: "claude-haiku-4-5", promptVersion: "3", inputTokens: 10, outputTokens: 5, latencyMs: 40, costUsd: 0.1 };
+  const entry = toHistoryEntry({ url: "u", title: "t", price: 100, seller: "Fake Name" }, { ...verdict(), evaluation });
+  assert.deepEqual(entry.evaluation, evaluation);
+  assert.equal(entry.score, 60);
+  assert.equal("seller" in entry, false);
 });

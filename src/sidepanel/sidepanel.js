@@ -6,6 +6,7 @@
 // which fetches photos and runs the Claude evaluation, then render the verdict.
 
 import { parseListing, checkRead } from "../shared/parser.js";
+import { toHistoryEntry } from "../shared/verdict.js";
 import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
 import {
   formatMoney,
@@ -118,28 +119,12 @@ function bindActions() {
 
   $("btn-save").addEventListener("click", async () => {
     if (!current.verdict) return;
-    await addToHistory(historyEntry()); // dedupes by URL — safe to click twice
+    await addToHistory(toHistoryEntry(current.listing, current.verdict)); // dedupes by URL — safe to click twice
     setSaved(true);
   });
 
   $("history-search").addEventListener("input", renderHistory);
   $("history-filter").addEventListener("change", renderHistory);
-}
-
-function historyEntry() {
-  const { listing, verdict } = current;
-  return {
-    url: listing.url,
-    title: listing.title,
-    category: listing.category,
-    price: listing.price,
-    currency: listing.currency,
-    score: verdict.score,
-    verdict: verdict.verdict,
-    recommendation: verdict.recommendation,
-    suggestedOffer: verdict.suggestedOffer,
-    summary: verdict.summary,
-  };
 }
 
 // Reflect whether the current listing is already in saved history, so the Save

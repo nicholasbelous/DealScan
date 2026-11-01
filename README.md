@@ -71,7 +71,7 @@ Options page --> chrome.storage.local <-- service worker reads key and settings
 
 ## Features
 
-- **History tab:** search saved evaluations by title, filter by category, open or remove them.
+- **History tab:** search saved evaluations by title, filter by category, open or remove them. Each saved entry also records the model, prompt version, token counts, web searches, attempts, latency, and cost calculated from the pricing table in `src/shared/pricing.js`. These appear in the JSON export, not the panel.
 - **Options page:**
   - API key
   - model: Haiku 4.5 (default), Sonnet 4.6, or Opus 4.8
@@ -106,6 +106,7 @@ src/
   shared/claude.js               Anthropic API call and retry on invalid output
   shared/prompt.js               the system prompt and listing text
   shared/verdict.js              output schema, validation, finalizeVerdict
+  shared/pricing.js              price table and cost calculation
   shared/parser.js               normalizes the scrape, decides if it is usable
   shared/storage.js              settings and history in chrome.storage.local
   shared/categories.js           keyword-based category detection
