@@ -153,6 +153,11 @@ test("parseListing records the verification method only when reliable", () => {
   );
 });
 
+test("parseListing carries the verified item ID only when reliable", () => {
+  assert.equal(parseListing(goodRead()).itemId, "123");
+  assert.equal(parseListing(goodRead({ verifiedItemId: "456" })).itemId, null);
+});
+
 test("parseListing keeps a Free listing at price 0", () => {
   const listing = parseListing(goodRead({ price: "Free" }));
   assert.equal(listing.reliable, true);

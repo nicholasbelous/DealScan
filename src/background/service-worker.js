@@ -11,6 +11,7 @@
 import { evaluateListing } from "../shared/claude.js";
 import { canReuseVerdict } from "../shared/parser.js";
 import { appendUsage, getSettings } from "../shared/storage.js";
+import { evaluateViaServer } from "../shared/server-client.js";
 import { VerdictRejectedError } from "../shared/verdict.js";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -103,8 +104,12 @@ async function handleEvaluate(listing, force) {
 // Every billed evaluation goes in the usage log, including rejections and
 // failures after a billed attempt, so measured cost isn't understated.
 async function evaluateAndLogUsage(listing, images) {
+  const settings = await getSettings();
   try {
-    const verdict = await evaluateListing(listing, images);
+    const verdict =
+      settings.mode === "server"
+        ? await evaluateViaServer(settings, listing, images)
+        : await evaluateListing(listing, images);
     await appendUsage({ status: "valid", ...verdict.evaluation });
     return verdict;
   } catch (err) {

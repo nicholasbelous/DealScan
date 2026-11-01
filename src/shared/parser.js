@@ -33,6 +33,7 @@ export function parseListing(raw) {
 
   return {
     url: stripTracking(raw.url),
+    itemId: reliable ? raw.verifiedItemId : null,
     reliable,
     rejectReason: reason,
     verifiedBy: reliable ? raw.verifiedBy ?? null : null,

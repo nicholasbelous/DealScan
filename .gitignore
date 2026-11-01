@@ -15,6 +15,9 @@ build/
 # these large source files are not.
 store-assets/screenshots/raw/
 
+# Server database
+server/data/
+
 # Logs
 *.log
 npm-debug.log*

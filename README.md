@@ -67,7 +67,36 @@ Options page --> chrome.storage.local <-- service worker reads key and settings
 
 **Model output validated in code.** The API can enforce the JSON shape, but not ranges or whether an answer contradicts itself. So code rejects invalid answers and computes the arithmetic itself. The tradeoffs are that a retry costs a second API call, and that these rules don't check whether the market estimate itself is right. Web search mode doesn't send the JSON schema, because search results carry citations and the API docs list citations as incompatible with a JSON format, so it relies on the prompt and code validation.
 
+**Same validation in both modes.** The server imports the prompt, validation, and pricing from `src/shared/`, so direct and server mode can't drift apart. The tradeoff is that shared code must stay free of browser-only and server-only calls, and the server has to be deployed alongside any change to it.
+
 **Evaluate only on an explicit click.** Browsing listings with the panel open never spends API credit. The tradeoff is an extra click when the panel is opened from the toolbar icon or after moving to another listing.
+
+## Server mode (optional)
+
+Direct mode is the default: the extension calls Anthropic with your own key, and no server is involved. Server mode sends evaluations through a small server you run instead.
+
+**Why it exists:**
+
+- **Key custody:** the Anthropic key lives only on the server, so friends can use DealScan with a token and never hold a key.
+- **Measurement:** every evaluation is recorded with its outcome, tokens, cost, and latency, so cost and rejection claims can come from data.
+- **Spending control:** a daily budget cap stops evaluations when it's reached. The server won't start without one.
+
+**Run it:**
+
+```sh
+npm install
+cp server/.env.example server/.env   # then set ANTHROPIC_API_KEY and DAILY_BUDGET_USD
+npm run token:create --workspace server -- your-name   # prints a token once
+npm start --workspace server
+```
+
+In the extension's Options, choose **Server**, enter the URL and token, and save. Chrome asks for permission to reach that server. The URL must use HTTPS, or HTTP on localhost.
+
+**Endpoints:** `POST /v1/evaluate` takes the listing and any photos, and returns a validated verdict, a rejection, or a typed error such as `budget_exceeded`. `GET /v1/evaluations/:itemId` returns the latest evaluation for an item. `GET /healthz` needs no token. Every other route needs `Authorization: Bearer <token>`.
+
+**What it stores:** SQLite tables for listings (item ID, title, price, condition, category, description), evaluations, and hashed tokens. It never receives or stores seller data, and it rejects requests with fields it doesn't recognize. It doesn't store photos, and it never contacts Facebook: the extension downloads photos and sends them along. Web search isn't available in server mode.
+
+The budget check runs before each evaluation, so requests already in progress can take spending slightly past the cap.
 
 ## Features
 
@@ -89,7 +118,7 @@ With web search off, Claude estimates prices from its own knowledge, not from cu
 1. Open `chrome://extensions/` and turn on **Developer mode**.
 2. Click **Load unpacked** and select this folder.
 
-There is no build step and there are no dependencies.
+The extension has no build step and no dependencies. Only the optional server in `server/` has dependencies.
 
 **Add your key:** right-click the DealScan icon, choose **Options**, paste your Anthropic API key from [console.anthropic.com](https://console.anthropic.com), and click **Save Settings**. API usage is billed to your Anthropic account.
 
@@ -112,6 +141,8 @@ src/
   shared/claude.js               direct mode: reads the key and settings
   shared/anthropic.js            Anthropic API call and retry on invalid output
   shared/stats.js                median and p90
+  shared/server-client.js        server mode: calls the DealScan server
+  shared/cache-key.js            hash of a listing's content
   shared/prompt.js               the system prompt and listing text
   shared/verdict.js              output schema, validation, finalizeVerdict
   shared/pricing.js              price table and cost calculation
@@ -121,6 +152,7 @@ src/
   shared/storage.js              settings and history in chrome.storage.local
   shared/categories.js           keyword-based category detection
   shared/formatter.js            display helpers
+server/                          optional backend: Fastify, SQLite, migrations
 assets/icons/                    extension icons
 store-assets/                    Web Store images and source logo, not shipped
 index.html, privacy-policy.html  GitHub Pages site, served from the repo root
@@ -133,7 +165,7 @@ privacy-policy-next.html         policy for this code, replaces privacy-policy.h
 
 - Your API key, settings, saved history, and usage log are stored in `chrome.storage.local`. They are not synced.
 - Cached results are kept in `chrome.storage.session`, which clears when the browser closes.
-- Listing data and your key are sent only to the Anthropic API. There is no DealScan server.
+- In direct mode, listing data and your key are sent only to the Anthropic API, with no DealScan server involved. In server mode, listing data and photos go to the server you configured, which sends them to Anthropic and stores what's listed above.
 - The content scripts load on all `facebook.com` pages (see below). Outside listing pages they only watch the page address. The button only appears on listing pages, and the panel only reads listing pages.
 
 ### Why the content scripts match all of facebook.com

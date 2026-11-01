@@ -14,11 +14,16 @@ const $ = (id) => document.getElementById(id);
 document.addEventListener("DOMContentLoaded", async () => {
   // Load current settings into the form.
   const settings = await getSettings();
+  $("mode").value = settings.mode;
+  $("server-url").value = settings.serverUrl;
+  $("server-token").value = settings.serverToken;
   $("anthropic-key").value = settings.anthropicKey;
+  showModeFields();
   $("model").value = settings.model;
   $("analyze-images").checked = settings.analyzeImages === true;
   $("web-search").checked = settings.useWebSearch === true;
 
+  $("mode").addEventListener("change", showModeFields);
   $("btn-save").addEventListener("click", save);
   $("toggle-key").addEventListener("click", toggleKeyVisibility);
   $("btn-export").addEventListener("click", exportHistory);
@@ -28,18 +33,58 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("version-label").textContent = `DealScan v${chrome.runtime.getManifest().version}`;
 });
 
+function showModeFields() {
+  const server = $("mode").value === "server";
+  $("server-fields").classList.toggle("hidden", !server);
+  $("key-card").classList.toggle("hidden", server);
+}
+
+// HTTPS, or plain HTTP only on this machine, so a token never crosses a network
+// in the clear. Returns the origin, or null if the URL isn't acceptable.
+function serverOrigin(value) {
+  try {
+    const url = new URL(value);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    return url.protocol === "https:" || (url.protocol === "http:" && local) ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 async function save() {
   const key = $("anthropic-key").value.trim();
+  const mode = $("mode").value;
+  const serverUrl = $("server-url").value.trim();
   const status = $("save-status");
+  const fail = (message) => {
+    status.textContent = message;
+    status.classList.add("error");
+  };
 
   // Light validation — catch obvious paste mistakes, not exhaustive.
   if (key && !key.startsWith("sk-ant-")) {
-    status.textContent = 'That doesn\'t look like an Anthropic key (should start with "sk-ant-").';
-    status.classList.add("error");
+    fail('That doesn\'t look like an Anthropic key (should start with "sk-ant-").');
     return;
   }
 
+  if (mode === "server") {
+    const origin = serverOrigin(serverUrl);
+    if (!origin) {
+      fail("The server URL must use HTTPS, or HTTP on localhost.");
+      return;
+    }
+    // Must run straight from the click, so nothing is awaited before it.
+    const granted = await chrome.permissions.request({ origins: [`${origin}/*`] });
+    if (!granted) {
+      fail("DealScan needs permission to reach that server.");
+      return;
+    }
+  }
+
   await saveSettings({
+    mode,
+    serverUrl,
+    serverToken: $("server-token").value.trim(),
     anthropicKey: key,
     model: $("model").value,
     analyzeImages: $("analyze-images").checked,

@@ -13,6 +13,11 @@ const KEYS = {
 const USAGE_LOG_LIMIT = 500;
 
 const DEFAULT_SETTINGS = {
+  // "direct": call Anthropic with anthropicKey. "server": call serverUrl with
+  // serverToken, and the Anthropic key stays on the server.
+  mode: "direct",
+  serverUrl: "",
+  serverToken: "",
   anthropicKey: "",
   model: "claude-haiku-4-5",
   // Web search adds a per-search fee plus result tokens. Off by default; opt in

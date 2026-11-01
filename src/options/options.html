@@ -10,10 +10,27 @@
   <div class="page">
     <header>
       <h1><img src="../../assets/icons/icon48.png" alt="" class="logo-img" />DealScan Settings</h1>
-      <p class="subtitle">Your key is stored locally in your browser and only ever sent to the Anthropic API.</p>
+      <p class="subtitle">Your key or token is stored locally in your browser. A key is only ever sent to the Anthropic API.</p>
     </header>
 
     <section class="card">
+      <h2>Mode</h2>
+      <label for="mode">How DealScan reaches Claude</label>
+      <select id="mode">
+        <option value="direct">Direct: use my own Anthropic API key (default)</option>
+        <option value="server">Server: use a DealScan server</option>
+      </select>
+      <div id="server-fields" class="hidden">
+        <label for="server-url">Server URL</label>
+        <input id="server-url" type="url" placeholder="https://..." autocomplete="off" spellcheck="false" />
+        <label for="server-token">Server token</label>
+        <input id="server-token" type="password" autocomplete="off" spellcheck="false" />
+        <p class="hint">Listing text and photos go to this server instead of straight to Anthropic, and
+          the server stores some of them. Web search isn't available in server mode.</p>
+      </div>
+    </section>
+
+    <section id="key-card" class="card">
       <h2>API Key</h2>
 
       <label for="anthropic-key">Anthropic API key <span class="required">required</span></label>
