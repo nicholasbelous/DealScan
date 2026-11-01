@@ -51,11 +51,13 @@ function itemIdFromUrl(url) {
 }
 
 /**
- * Whether a cached verdict still applies. One made without photos doesn't when
- * photos are now available, e.g. after a reload exposes the page's own data.
+ * Whether a cached verdict still applies. One made without photos is replaced
+ * only if this read offers more photos than that evaluation had to work with,
+ * e.g. a reload exposed the page's own data. Offering the same photos again
+ * after they failed to download would just pay for the same answer.
  */
-export function canReuseVerdict(cached, photosAvailable) {
-  return !photosAvailable || cached.imagesAnalyzed > 0;
+export function canReuseVerdict(cached, photosOffered) {
+  return cached.imagesAnalyzed > 0 || photosOffered <= (cached.imagesOffered ?? 0);
 }
 
 /**

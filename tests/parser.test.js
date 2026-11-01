@@ -168,12 +168,19 @@ test("parseListing throws when nothing was scraped", () => {
 
 // --- canReuseVerdict ----------------------------------------------------------
 
-test("a cached verdict without photos isn't reused once photos are available", () => {
-  assert.equal(canReuseVerdict({ imagesAnalyzed: 0 }, true), false);
+test("replaces a no-photos verdict when the new read offers more photos", () => {
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 0, imagesOffered: 0 }, 3), false);
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 0, imagesOffered: 1 }, 3), false);
 });
 
-test("a cached verdict is reused when photos add nothing new", () => {
-  assert.equal(canReuseVerdict({ imagesAnalyzed: 0 }, false), true);
-  assert.equal(canReuseVerdict({ imagesAnalyzed: 2 }, true), true);
-  assert.equal(canReuseVerdict({ imagesAnalyzed: 2 }, false), true);
+test("reuses a no-photos verdict when photos offered again failed to load", () => {
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 0, imagesOffered: 3 }, 3), true);
+});
+
+test("reuses a no-photos verdict when the read has no photos", () => {
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 0, imagesOffered: 0 }, 0), true);
+});
+
+test("reuses a verdict that already had photos", () => {
+  assert.equal(canReuseVerdict({ imagesAnalyzed: 2, imagesOffered: 2 }, 3), true);
 });

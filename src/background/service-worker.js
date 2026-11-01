@@ -74,20 +74,18 @@ async function handleEvaluate(listing, force) {
   }
 
   const { analyzeImages } = await getSettings();
-  const photosAvailable = analyzeImages && listing.images?.length > 0;
+  const photosOffered = analyzeImages ? Math.min(listing.images?.length ?? 0, MAX_IMAGES) : 0;
 
   const cacheKey = listing.url ? `verdict:${listing.url}` : null;
   if (cacheKey && !force) {
     const cached = await readCache(cacheKey);
-    if (cached && canReuseVerdict(cached, photosAvailable)) return { ...cached, fromCache: true };
+    if (cached && canReuseVerdict(cached, photosOffered)) return { ...cached, fromCache: true };
   }
 
-  const images =
-    analyzeImages && Array.isArray(listing.images) && listing.images.length > 0
-      ? await fetchImages(listing.images)
-      : [];
+  const images = photosOffered > 0 ? await fetchImages(listing.images) : [];
 
   const verdict = await evaluateListing(listing, images);
+  verdict.imagesOffered = photosOffered;
   verdict.imagesAnalyzed = images.length;
   verdict.photoAnalysisOn = analyzeImages;
 
