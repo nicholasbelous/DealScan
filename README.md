@@ -23,6 +23,45 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 
 An item ID match is not required. If only the page source has data, the panel looks for two matching reads in a row, but if it runs out of retries it can still accept the last read as long as that read has a title and a price. In that case the result could describe the wrong listing, so check that the title and price in the panel match the page.
 
+## Architecture
+
+```
+Facebook listing page                    Extension
++---------------------------+            +-----------------------------+
+| Content scripts           |  scrape    | Side panel (UI)             |
+|  scraper.js  reads page   |<---------->|  normalizes the scrape,     |
+|  injector.js button       |  messages  |  shows the result, saves    |
+|  observer.js navigation   |            |  history                    |
++-------------+-------------+            +--------------+--------------+
+              | open panel                              | evaluate
+              v                                         v
++-------------------------------------------------------------------------+
+| Service worker: downloads photos, checks the result cache, calls Claude |
++------------+----------------------------------------+-------------------+
+             |                                        |
+             v                                        v
+      fbcdn.net (photos)                     api.anthropic.com
+
+Options page --> chrome.storage.local <-- service worker reads key and settings
+```
+
+- **Content scripts** run in the Facebook page. They read the listing and show the button, and they make no API calls.
+- **Side panel** is the main UI. It asks the content script for a scrape and decides whether the scrape is usable. It has its own access to saved history.
+- **Service worker** makes every network request: photo downloads and Anthropic API calls.
+- **Options page** saves the API key and settings, and exports or clears history.
+
+## Design decisions
+
+**API calls only from the service worker.** The key never enters the Facebook page, and photos can be downloaded despite cross-origin limits. The tradeoff is extra message passing between the page, the panel, and the worker.
+
+**User-supplied key stored locally.** There is no server to run and no shared bill, and listing data goes straight to Anthropic. The tradeoffs are that each user needs an Anthropic account and pays for their own usage, and the key sits unencrypted in `chrome.storage.local`, with calls made directly from the browser.
+
+**Web search off by default, to keep cost down.** Each evaluation stays one request with no search charges. The tradeoff is that the price range is Claude's estimate from its own knowledge, which can be out of date or wrong. Users can turn search on in Options.
+
+**Verdict consistency enforced in code.** The model could return a label that contradicts its score, or get the arithmetic wrong. So code sets the verdict from the score, calculates the percent above or below market, takes the asking price from the scrape, and caps the offer. The tradeoff is that these rules can override the model and hide its mistakes. They also don't check whether the market estimate itself is right.
+
+**Evaluate only on an explicit click.** Browsing listings with the panel open never spends API credit. The tradeoff is an extra click when the panel is opened from the toolbar icon or after moving to another listing.
+
 ## Features
 
 - **History tab:** search saved evaluations by title, filter by category, open or remove them.
