@@ -1,6 +1,7 @@
 // Runs the real scraper.js against fake pages in headless Chrome, because panel
 // scoping can't be tested without a real DOM. All IDs and titles are made up.
-// Skipped if Chrome isn't installed (set CHROME_PATH to point at it).
+// Without Chrome these skip on a developer's machine but FAIL in CI, so a missing
+// browser can never pass silently. Set CHROME_PATH to choose a specific binary.
 
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,12 +18,16 @@ const PREVIOUS = "1110002";
 const SELLER = "9990009";
 const TITLE = "Fake Road Bike";
 
-const CHROME = [
-  process.env.CHROME_PATH,
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "/usr/bin/google-chrome",
-  "/usr/bin/chromium",
-].find((p) => p && fs.existsSync(p));
+const IN_CI = Boolean(process.env.CI);
+const CHROME = (
+  process.env.CHROME_PATH
+    ? [process.env.CHROME_PATH]
+    : [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+      ]
+).find((p) => fs.existsSync(p));
 
 const scraperSource = fs.readFileSync(new URL("../src/content/scraper.js", import.meta.url), "utf8");
 
@@ -73,7 +78,10 @@ async function scrape(html) {
 }
 
 before(async () => {
-  if (!CHROME) return;
+  if (!CHROME) {
+    if (IN_CI) throw new Error("Chrome not found in CI: the scraper tests can't run.");
+    return;
+  }
   server = http
     .createServer((req, res) => {
       const id = req.url.match(/item\/(\d+)/)?.[1];
@@ -85,7 +93,15 @@ before(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dealscan-test-"));
   chrome = spawn(
     CHROME,
-    ["--headless=new", "--no-first-run", "--disable-gpu", `--user-data-dir=${tmp}`, "--remote-debugging-pipe", "about:blank"],
+    [
+      "--headless=new",
+      "--no-first-run",
+      "--disable-gpu",
+      `--user-data-dir=${tmp}`,
+      "--remote-debugging-pipe",
+      ...(IN_CI ? ["--no-sandbox"] : []), // CI runners don't allow Chrome's sandbox
+      "about:blank",
+    ],
     { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"] }
   );
   let buf = "";
@@ -112,7 +128,7 @@ after(() => {
   if (tmp) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 3 });
 });
 
-const opts = { skip: CHROME ? false : "Chrome not found" };
+const opts = { skip: CHROME || IN_CI ? false : "Chrome not found" };
 
 test("accepts a matching panel product_id", opts, async () => {
   const raw = await scrape(page(otherCard + panel(sellerLink(ITEM) + sellerLink(ITEM))));

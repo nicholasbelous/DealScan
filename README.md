@@ -120,7 +120,7 @@ index.html, privacy-policy.html  GitHub Pages site, served from the repo root
 privacy-policy-next.html         policy for this code, replaces privacy-policy.html at release
 ```
 
-`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and model output validation, with the API mocked. The scraper tests run against fake pages in headless Chrome and are skipped if Chrome isn't installed. The tests don't call the Anthropic API.
+`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and model output validation, with the API mocked. The scraper tests run against fake pages in headless Chrome. Without Chrome they skip on a developer's machine and fail in CI, where GitHub Actions runs `npm test` on every push and pull request. The tests don't call the Anthropic API.
 
 ## Data and privacy
 
