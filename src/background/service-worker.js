@@ -11,6 +11,7 @@
 import { evaluateListing } from "../shared/claude.js";
 import { canReuseVerdict } from "../shared/parser.js";
 import { getSettings } from "../shared/storage.js";
+import { VerdictRejectedError } from "../shared/verdict.js";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_IMAGES = 3;
@@ -54,7 +55,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "EVALUATE_LISTING":
       handleEvaluate(message.payload, message.force === true)
         .then((result) => sendResponse({ ok: true, data: result }))
-        .catch((err) => sendResponse({ ok: false, error: String(err.message ?? err) }));
+        .catch((err) =>
+          sendResponse({
+            ok: false,
+            error: String(err.message ?? err),
+            rejected: err instanceof VerdictRejectedError,
+          })
+        );
       return true;
 
     default:

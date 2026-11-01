@@ -16,7 +16,8 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 5. The service worker checks for a saved result for that listing URL from the last hour. If there is one, the panel shows it, marked "cached".
 6. Otherwise, if photo analysis is on, the service worker downloads up to three listing photos. Photos come only from the page JSON, so a read verified only from the panel is evaluated without photos. Photos that fail to download or are very small or very large are skipped.
 7. The service worker sends the title, category, price, condition, parsed year and mileage, location, the start of the description, and any photos to the Anthropic API. It retries on rate limits, server errors, and network failures.
-8. Code then corrects the response: it takes the asking price from the scrape, clamps the score, calculates the percent above or below market, sets the verdict label from the score, and caps the suggested offer at the asking price.
+8. Code validates the answer: required fields, a whole-number score from 0 to 100, a market range with low at or below high, a reasonable offer, a verdict that matches the score, and no good score on an above-market price. An invalid answer gets one retry, which is billed. If that also fails, or Claude declines, the panel shows the reason and no result.
+   Code then replaces what it can compute: the asking price from the scrape, the percent above or below market, the verdict label from the score, and an offer capped at the asking price.
 9. The panel shows the result, including which method verified the read (listing panel or page data). **Save** adds it to local history, and the re-run button makes a new API call.
 
 ### Known limitation
@@ -64,7 +65,7 @@ Options page --> chrome.storage.local <-- service worker reads key and settings
 
 **Web search off by default, to keep cost down.** Each evaluation stays one request with no search charges. The tradeoff is that the price range is Claude's estimate from its own knowledge, which can be out of date or wrong. Users can turn search on in Options.
 
-**Verdict consistency enforced in code.** The model could return a label that contradicts its score, or get the arithmetic wrong. So code sets the verdict from the score, calculates the percent above or below market, takes the asking price from the scrape, and caps the offer. The tradeoff is that these rules can override the model and hide its mistakes. They also don't check whether the market estimate itself is right.
+**Model output validated in code.** The API can enforce the JSON shape, but not ranges or whether an answer contradicts itself. So code rejects invalid answers and computes the arithmetic itself. The tradeoffs are that a retry costs a second API call, and that these rules don't check whether the market estimate itself is right. Web search mode doesn't send the JSON schema, because search results carry citations and the API docs list citations as incompatible with a JSON format, so it relies on the prompt and code validation.
 
 **Evaluate only on an explicit click.** Browsing listings with the panel open never spends API credit. The tradeoff is an extra click when the panel is opened from the toolbar icon or after moving to another listing.
 
@@ -102,7 +103,9 @@ src/
   content/observer.js            detects navigation between listings
   sidepanel/                     Evaluate and History tabs
   options/                       settings and history export
-  shared/claude.js               prompt, Anthropic API call, response corrections
+  shared/claude.js               Anthropic API call and retry on invalid output
+  shared/prompt.js               the system prompt and listing text
+  shared/verdict.js              output schema, validation, finalizeVerdict
   shared/parser.js               normalizes the scrape, decides if it is usable
   shared/storage.js              settings and history in chrome.storage.local
   shared/categories.js           keyword-based category detection
@@ -113,7 +116,7 @@ index.html, privacy-policy.html  GitHub Pages site, served from the repo root
 privacy-policy-next.html         policy for this code, replaces privacy-policy.html at release
 ```
 
-`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and the response corrections. The scraper tests run against fake pages in headless Chrome and are skipped if Chrome isn't installed. The tests don't call the Anthropic API.
+`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and model output validation, with the API mocked. The scraper tests run against fake pages in headless Chrome and are skipped if Chrome isn't installed. The tests don't call the Anthropic API.
 
 ## Data and privacy
 

@@ -207,6 +207,10 @@ async function evaluateActiveTab({ force = false } = {}) {
       payload: listing,
       force,
     });
+    if (res?.rejected) {
+      showAnswerRejected(res.error);
+      return;
+    }
     if (!res?.ok) throw new Error(res?.error ?? "Evaluation failed");
 
     current.verdict = res.data;
@@ -318,7 +322,16 @@ function reloadTab(tabId) {
 }
 
 function showRejected(listing) {
+  $("rejected-title").textContent = "Couldn't read this listing";
   $("rejected-reason").textContent = listing.rejectReason;
+  $("rejected-cost").textContent = "DealScan didn't evaluate it, so there's no charge.";
+  showState("unreliable");
+}
+
+function showAnswerRejected(reason) {
+  $("rejected-title").textContent = "Couldn't trust this evaluation";
+  $("rejected-reason").textContent = reason;
+  $("rejected-cost").textContent = "No result is shown, but the API attempts may still be billed.";
   showState("unreliable");
 }
 

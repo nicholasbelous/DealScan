@@ -52,9 +52,9 @@
     <section id="state-unreliable" class="hidden">
       <div class="empty-card">
         <p class="empty-icon">🔍</p>
-        <p class="empty-title">Couldn't read this listing</p>
+        <p id="rejected-title" class="empty-title"></p>
         <p id="rejected-reason" class="empty-sub"></p>
-        <p class="empty-sub">DealScan didn't evaluate it, so there's no charge.
+        <p class="empty-sub"><span id="rejected-cost"></span>
           Try Again reloads the page and reads it again.</p>
         <button id="btn-reload" class="btn btn-primary btn-block">Try Again</button>
       </div>
