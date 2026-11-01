@@ -77,7 +77,7 @@ Direct mode is the default: the extension calls Anthropic with your own key, and
 
 **Why it exists:**
 
-- **Key custody:** the Anthropic key lives only on the server, so friends can use DealScan with a token and never hold a key.
+- **Key custody:** the Anthropic key lives only on the server, so someone with a token never holds a key. Using it from other machines would need a deployed server and a manifest change.
 - **Measurement:** every evaluation is recorded with its outcome, tokens, cost, and latency, so cost and rejection claims can come from data.
 - **Spending control:** a daily budget cap stops evaluations when it's reached. The server won't start without one. Each token is also rate limited.
 - **Shared cache:** when anyone evaluates identical content, the server reuses the answer at no cost. The cache key is the item ID, a hash of the listing's normalized content including photos, the model, and the prompt version, so a changed price, description, or photo is a miss.
@@ -91,7 +91,7 @@ npm run token:create --workspace server -- your-name   # prints a token once
 npm start --workspace server
 ```
 
-In the extension's Options, choose **Server**, enter the URL and token, and save. Chrome asks for permission to reach that server. The URL must use HTTPS, or HTTP on localhost.
+In the extension's Options, choose **Server**, enter the URL and token, and save. Chrome asks for permission to reach it. For now the server must run on your own machine, at `http://localhost`: the extension isn't allowed to reach anywhere else.
 
 **Endpoints:** `POST /v1/evaluate` takes the listing and any photos, and returns a validated verdict, a rejection, or a typed error such as `budget_exceeded`. `GET /v1/evaluations/:itemId` returns the latest evaluation for an item. `GET /v1/stats?window=24h|7d|30d|all` returns evaluations by status, top rejection reasons, cost and latency median and p90, and cache hit rate. Cost and latency cover only requests that reached the API, including retries and rejected answers. `GET /stats` is a simple page that shows the same numbers. It holds no data until you enter a token, and any valid token can read these server-wide totals. `GET /healthz` and the stats page's files need no token. Every other route needs `Authorization: Bearer <token>`.
 

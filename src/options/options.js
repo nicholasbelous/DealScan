@@ -39,13 +39,12 @@ function showModeFields() {
   $("key-card").classList.toggle("hidden", server);
 }
 
-// HTTPS, or plain HTTP only on this machine, so a token never crosses a network
-// in the clear. Returns the origin, or null if the URL isn't acceptable.
+// Only a server on this machine for now: optional_host_permissions in the manifest
+// allows nothing else. Returns the origin, or null if the URL isn't acceptable.
 function serverOrigin(value) {
   try {
     const url = new URL(value);
-    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-    return url.protocol === "https:" || (url.protocol === "http:" && local) ? url.origin : null;
+    return url.protocol === "http:" && url.hostname === "localhost" ? url.origin : null;
   } catch {
     return null;
   }
@@ -70,7 +69,7 @@ async function save() {
   if (mode === "server") {
     const origin = serverOrigin(serverUrl);
     if (!origin) {
-      fail("The server URL must use HTTPS, or HTTP on localhost.");
+      fail("The server URL must be on this machine, like http://localhost:3000.");
       return;
     }
     // Must run straight from the click, so nothing is awaited before it.

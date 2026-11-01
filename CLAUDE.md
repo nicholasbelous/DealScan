@@ -70,6 +70,7 @@ Content script (scraper)  ->  Service worker  ->  [direct mode] Anthropic API
 - Current server scope: no web search in server mode.
 - Direct mode: user supplies their own Anthropic key (current published behavior). Calls use plain `fetch` with the `anthropic-dangerous-direct-browser-access` header.
 - Server mode: the extension calls the DealScan server with a token. The Anthropic key lives only on the server.
+- `optional_host_permissions` in the manifest allows only `http://localhost/*`, on purpose. If the server is deployed, add its exact HTTPS domain there (never `https://*/*`), update `serverOrigin` in `src/options/options.js`, and update the privacy policy.
 
 ### Backend
 - Node.js (LTS), plain JavaScript ES modules, Fastify, SQLite via better-sqlite3. Ask before deviating.
