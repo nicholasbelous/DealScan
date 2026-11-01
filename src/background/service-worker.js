@@ -10,7 +10,7 @@
 
 import { evaluateListing } from "../shared/claude.js";
 import { canReuseVerdict } from "../shared/parser.js";
-import { getSettings } from "../shared/storage.js";
+import { appendUsage, getSettings } from "../shared/storage.js";
 import { VerdictRejectedError } from "../shared/verdict.js";
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -91,13 +91,29 @@ async function handleEvaluate(listing, force) {
 
   const images = photosOffered > 0 ? await fetchImages(listing.images) : [];
 
-  const verdict = await evaluateListing(listing, images);
+  const verdict = await evaluateAndLogUsage(listing, images);
   verdict.imagesOffered = photosOffered;
   verdict.imagesAnalyzed = images.length;
   verdict.photoAnalysisOn = analyzeImages;
 
   if (cacheKey) await writeCache(cacheKey, verdict);
   return verdict;
+}
+
+// Every billed evaluation goes in the usage log, including rejections and
+// failures after a billed attempt, so measured cost isn't understated.
+async function evaluateAndLogUsage(listing, images) {
+  try {
+    const verdict = await evaluateListing(listing, images);
+    await appendUsage({ status: "valid", ...verdict.evaluation });
+    return verdict;
+  } catch (err) {
+    if (err.evaluation?.inputTokens > 0) {
+      const status = err instanceof VerdictRejectedError ? "rejected" : "error";
+      await appendUsage({ status, reason: err.message, ...err.evaluation });
+    }
+    throw err;
+  }
 }
 
 // --- Image fetching (background bypasses CORS for *.fbcdn.net) -----------------

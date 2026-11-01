@@ -6,9 +6,11 @@
 // which fetches photos and runs the Claude evaluation, then render the verdict.
 
 import { parseListing, checkRead } from "../shared/parser.js";
+import { summarizeCost } from "../shared/stats.js";
 import { toHistoryEntry } from "../shared/verdict.js";
 import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
 import {
+  formatCost,
   formatMoney,
   formatRelative,
   noPhotosNotice,
@@ -17,6 +19,7 @@ import {
 } from "../shared/formatter.js";
 import {
   getHistory,
+  getUsageLog,
   addToHistory,
   removeFromHistory,
   isInHistory,
@@ -399,7 +402,18 @@ function populateCategoryFilter() {
   }
 }
 
+async function renderCostSummary() {
+  const summary = summarizeCost(await getUsageLog());
+  $("history-cost").classList.toggle("hidden", !summary);
+  if (!summary) return;
+  $("history-cost").textContent =
+    `Measured cost over ${summary.count} evaluation${summary.count === 1 ? "" : "s"}: ` +
+    `median ${formatCost(summary.median)}, p90 ${formatCost(summary.p90)}, ` +
+    `total ${formatCost(summary.total)}. Includes retries and rejected answers.`;
+}
+
 async function renderHistory() {
+  renderCostSummary();
   const all = await getHistory();
   const query = $("history-search").value.trim().toLowerCase();
   const category = $("history-filter").value;
@@ -443,6 +457,7 @@ function renderCardList(listEl, emptyEl, entries, onRemove) {
       entry.verdict,
       categoryLabel(entry.category),
       formatRelative(entry.savedAt),
+      Number.isFinite(entry.evaluation?.costUsd) ? formatCost(entry.evaluation.costUsd) : null,
     ]
       .filter(Boolean)
       .join(" · ");

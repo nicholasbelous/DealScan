@@ -160,6 +160,31 @@ test("the record counts a retry, since it's billed", async () => {
   assert.equal(evaluation.outputTokens, 10);
 });
 
+test("a rejection carries its billed usage, including the retry", async () => {
+  mockApi(reply("{not json"), reply("still not json"));
+  await assert.rejects(evaluateListing(listing), (err) => {
+    assert.equal(err.evaluation.attempts, 2);
+    assert.equal(err.evaluation.inputTokens, 20);
+    assert.ok(err.evaluation.costUsd > 0);
+    return true;
+  });
+});
+
+test("a failure after a billed attempt keeps that attempt's usage", async () => {
+  const first = reply("{not json");
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) return { ok: true, json: async () => first };
+    return { ok: false, status: 401, headers: new Headers(), text: async () => "" };
+  };
+  await assert.rejects(evaluateListing(listing), (err) => {
+    assert.equal(err instanceof VerdictRejectedError, false);
+    assert.equal(err.evaluation.inputTokens, 10);
+    return true;
+  });
+});
+
 test("cost is null for a model with no price, not a guess", async () => {
   useSettings({ model: "claude-unknown" });
   mockApi(reply(good));

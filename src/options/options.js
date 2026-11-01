@@ -1,6 +1,13 @@
 // DealScan options page — API keys, model choice, data export.
 
-import { getSettings, saveSettings, getHistory, clearHistory } from "../shared/storage.js";
+import {
+  getSettings,
+  saveSettings,
+  getHistory,
+  clearHistory,
+  getUsageLog,
+  clearUsageLog,
+} from "../shared/storage.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -15,6 +22,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btn-save").addEventListener("click", save);
   $("toggle-key").addEventListener("click", toggleKeyVisibility);
   $("btn-export").addEventListener("click", exportHistory);
+  $("btn-export-usage").addEventListener("click", exportUsageLog);
   $("btn-clear").addEventListener("click", clearAllHistory);
 
   $("version-label").textContent = `DealScan v${chrome.runtime.getManifest().version}`;
@@ -48,27 +56,38 @@ function toggleKeyVisibility() {
   input.type = input.type === "password" ? "text" : "password";
 }
 
-async function exportHistory() {
-  const history = await getHistory();
-  const blob = new Blob([JSON.stringify(history, null, 2)], { type: "application/json" });
+function downloadJson(name, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = `dealscan-history-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `${name}-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
 
+async function exportHistory() {
+  const history = await getHistory();
+  downloadJson("dealscan-history", history);
   $("data-status").textContent = `Exported ${history.length} evaluation${history.length === 1 ? "" : "s"}.`;
+}
+
+async function exportUsageLog() {
+  const log = await getUsageLog();
+  downloadJson("dealscan-usage", log);
+  $("data-status").textContent = `Exported ${log.length} usage record${log.length === 1 ? "" : "s"}.`;
 }
 
 async function clearAllHistory() {
   const history = await getHistory();
-  if (history.length === 0) {
-    $("data-status").textContent = "History is already empty.";
+  const log = await getUsageLog();
+  if (history.length === 0 && log.length === 0) {
+    $("data-status").textContent = "History and usage log are already empty.";
     return;
   }
-  if (!confirm(`Delete all ${history.length} saved evaluations? This can't be undone.`)) return;
+  if (!confirm(`Delete ${history.length} saved evaluations and ${log.length} usage records? This can't be undone.`)) return;
   await clearHistory();
-  $("data-status").textContent = "History cleared.";
+  await clearUsageLog();
+  $("data-status").textContent = "History and usage log cleared.";
 }

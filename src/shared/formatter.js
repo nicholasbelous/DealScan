@@ -6,6 +6,11 @@ export function formatMoney(amount, currency = "$") {
   return `${currency}${Math.round(Number(amount)).toLocaleString("en-US")}`;
 }
 
+/** Evaluation cost in USD. Four decimals: these are fractions of a cent. */
+export function formatCost(usd) {
+  return Number.isFinite(usd) ? `$${usd.toFixed(4)}` : "—";
+}
+
 /** Timestamp → "Jun 10" this year, "Jun 10, 2025" otherwise. */
 function formatDate(timestamp) {
   if (!timestamp) return "—";

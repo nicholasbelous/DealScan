@@ -21,7 +21,7 @@
         <input id="anthropic-key" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
         <button id="toggle-key" class="btn btn-small" type="button" title="Show/hide">👁️</button>
       </div>
-      <p class="hint">Get one at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys. New accounts include $5 free credit.</p>
+      <p class="hint">Get one at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> → API Keys.</p>
     </section>
 
     <section class="card">
@@ -32,30 +32,31 @@
         <option value="claude-sonnet-4-6">Sonnet 4.6 — sharper reasoning</option>
         <option value="claude-opus-4-8">Opus 4.8 — top accuracy, priciest</option>
       </select>
-      <p class="hint">Haiku handles most listings well (~½¢ per scan). Step up to Sonnet for trickier
-        categories like vehicles or collectibles.</p>
+      <p class="hint">Haiku handles most listings well. Step up to Sonnet for trickier categories like
+        vehicles or collectibles. Each evaluation's actual cost is shown in History.</p>
 
       <label class="checkbox-row" for="analyze-images">
         <input id="analyze-images" type="checkbox" />
         <span>Analyze listing photos</span>
       </label>
-      <p class="hint">On: Claude looks at the first 2–3 photos to judge condition and catch stock-photo
-        scams — a fraction of a cent extra, recommended. Off: text only.</p>
+      <p class="hint">On: Claude looks at up to three photos to judge condition and catch stock-photo
+        scams, which adds some cost. Off: text only.</p>
 
       <label class="checkbox-row" for="web-search">
         <input id="web-search" type="checkbox" />
-        <span>Use live web search <span class="optional">~10× cost</span></span>
+        <span>Use live web search <span class="optional">costs more</span></span>
       </label>
       <p class="hint">Off: Claude estimates prices from its built-in knowledge (recommended).
-        On: it runs a live web search for current prices (~3–8¢ per scan — worth it for big purchases
-        like vehicles).</p>
+        On: it runs a live web search for current prices, which adds a per-search fee and result
+        tokens. Consider it for big purchases like vehicles.</p>
     </section>
 
     <section class="card">
       <h2>Data</h2>
       <div class="button-row">
         <button id="btn-export" class="btn">⬇️ Export history as JSON</button>
-        <button id="btn-clear" class="btn btn-danger">🗑️ Clear history</button>
+        <button id="btn-export-usage" class="btn">⬇️ Export usage log as JSON</button>
+        <button id="btn-clear" class="btn btn-danger">🗑️ Clear history and usage log</button>
       </div>
       <p id="data-status" class="hint"></p>
     </section>

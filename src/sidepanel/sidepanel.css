@@ -298,6 +298,8 @@ body {
 .list-controls input:focus,
 .list-controls select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 
+.history-cost { color: var(--muted); font-size: 12px; line-height: 1.4; margin-bottom: 12px; }
+
 .card-list { list-style: none; }
 
 .card-list li {

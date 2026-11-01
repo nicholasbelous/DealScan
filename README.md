@@ -71,13 +71,14 @@ Options page --> chrome.storage.local <-- service worker reads key and settings
 
 ## Features
 
-- **History tab:** search saved evaluations by title, filter by category, open or remove them. Each saved entry also records the model, prompt version, token counts, web searches, attempts, latency, and cost calculated from the pricing table in `src/shared/pricing.js`. These appear in the JSON export, not the panel.
+- **History tab:** search saved evaluations by title, filter by category, open or remove them. Each saved entry also records the model, prompt version, token counts, web searches, attempts, latency, and cost calculated from the pricing table in `src/shared/pricing.js`. The History tab shows each entry's cost.
+- **Usage log:** every billed evaluation, saved or not, is logged locally with its status, tokens, and cost. The History tab shows the median, p90, and total from this log, so they include retries and rejected answers. Results served from the cache aren't logged, because they cost nothing.
 - **Options page:**
   - API key
   - model: Haiku 4.5 (default), Sonnet 4.6, or Opus 4.8
   - photo analysis (on by default)
   - live web search for prices (off by default)
-  - export history as JSON, or clear it
+  - export history or the usage log as JSON, or clear them
 
 With web search off, Claude estimates prices from its own knowledge, not from current listings.
 
@@ -103,7 +104,9 @@ src/
   content/observer.js            detects navigation between listings
   sidepanel/                     Evaluate and History tabs
   options/                       settings and history export
-  shared/claude.js               Anthropic API call and retry on invalid output
+  shared/claude.js               direct mode: reads the key and settings
+  shared/anthropic.js            Anthropic API call and retry on invalid output
+  shared/stats.js                median and p90
   shared/prompt.js               the system prompt and listing text
   shared/verdict.js              output schema, validation, finalizeVerdict
   shared/pricing.js              price table and cost calculation
@@ -121,7 +124,7 @@ privacy-policy-next.html         policy for this code, replaces privacy-policy.h
 
 ## Data and privacy
 
-- Your API key, settings, and saved history are stored in `chrome.storage.local`. They are not synced.
+- Your API key, settings, saved history, and usage log are stored in `chrome.storage.local`. They are not synced.
 - Cached results are kept in `chrome.storage.session`, which clears when the browser closes.
 - Listing data and your key are sent only to the Anthropic API. There is no DealScan server.
 - The content scripts load on all `facebook.com` pages (see below). Outside listing pages they only watch the page address. The button only appears on listing pages, and the panel only reads listing pages.

@@ -7,16 +7,19 @@
 const KEYS = {
   settings: "settings",
   history: "history",
+  usageLog: "usageLog",
 };
+
+const USAGE_LOG_LIMIT = 500;
 
 const DEFAULT_SETTINGS = {
   anthropicKey: "",
   model: "claude-haiku-4-5",
-  // Web search adds ~10x cost per evaluation (flat per-search fee + thousands
-  // of result tokens). Off by default; opt in via Options for big purchases.
+  // Web search adds a per-search fee plus result tokens. Off by default; opt in
+  // via Options for big purchases.
   useWebSearch: false,
-  // Send 2-3 listing photos to Claude for condition + stock-photo detection.
-  // Small cost bump (~0.3-0.5c/scan); on by default per user preference.
+  // Send up to three listing photos to Claude for condition + stock-photo
+  // detection. On by default per user preference.
   analyzeImages: true,
 };
 
@@ -64,6 +67,23 @@ export async function removeFromHistory(id) {
 
 export async function clearHistory() {
   await set(KEYS.history, []);
+}
+
+// --- Usage log ---------------------------------------------------------------
+// One record per billed evaluation, saved or not, so measured cost includes
+// retries and rejections. Tokens, cost, and status only: no listing content.
+
+export async function getUsageLog() {
+  return (await get(KEYS.usageLog)) || [];
+}
+
+export async function appendUsage(record) {
+  const log = await getUsageLog();
+  await set(KEYS.usageLog, [{ at: Date.now(), ...record }, ...log].slice(0, USAGE_LOG_LIMIT));
+}
+
+export async function clearUsageLog() {
+  await set(KEYS.usageLog, []);
 }
 
 // --- Low-level chrome.storage.local helpers ----------------------------------
