@@ -110,6 +110,7 @@ src/
 assets/icons/                    extension icons
 store-assets/                    Web Store images and source logo, not shipped
 index.html, privacy-policy.html  GitHub Pages site, served from the repo root
+privacy-policy-next.html         policy for this code, replaces privacy-policy.html at release
 ```
 
 `npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and the response corrections. The scraper tests run against fake pages in headless Chrome and are skipped if Chrome isn't installed. The tests don't call the Anthropic API.

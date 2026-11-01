@@ -144,3 +144,5 @@ eval/             harness script and results
 
 ## Distribution
 Published on the Chrome Web Store. Personal use first, shared free, not sold. Direct mode stays the default in the published version unless the server is deployed.
+
+`privacy-policy.html` is live on GitHub Pages and describes the version store users run (1.2.1, commit `e3e98cd`). `privacy-policy-next.html` describes the code on this branch, so update it with any behavior change. At release, when the new version goes live on the store, it replaces `privacy-policy.html`.

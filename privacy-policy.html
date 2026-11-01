@@ -17,6 +17,7 @@
 <body>
   <h1>DealScan — Privacy Policy</h1>
   <p class="updated">Last updated: November 1, 2026</p>
+  <p class="updated">This policy describes DealScan version 1.2.1.</p>
 
   <p>DealScan is a browser extension that evaluates Facebook Marketplace listings using the
      Anthropic (Claude) API. This policy explains what data the extension handles and how.</p>
@@ -32,11 +33,6 @@
      the page address. Reading the listing does not send it anywhere. If no structured description
      is available, the extension uses the longest block of text on the page as the description,
      which could include other text from the page.</p>
-  <p>To confirm it is reading the right listing, the extension reads the listing ID from links on
-     the listing's page and ignores the rest of those links. These links can point to the seller's
-     profile, but the extension does not read, store, log, or send the seller's profile ID. It also
-     compares the listing's title and price with the page title and with any search result for the
-     same listing on the page. These checks stay in your browser.</p>
   <p>The extension's scripts load on all facebook.com pages so they can detect when you move to a
      listing without a page reload. On other pages they check only the page address and do not
      read page content.</p>
@@ -52,9 +48,8 @@
   </ul>
   <p>Nothing is sent when you only browse listings, when the extension can't read a listing, or
      when a cached result is shown.</p>
-  <p><strong>Seller information.</strong> Starting with version 1.3.0, the extension does not read
-     the seller's name from the listing's data. Published versions up to and including 1.2.1 read
-     the seller's name from the page but did not send it to Anthropic or save it. No published version reads
+  <p><strong>Seller information.</strong> This version reads the seller's name from the listing's
+     data when the page provides it, but does not send it to Anthropic or save it. It does not read
      the seller's profile link. Text and photos are sent as they appear in the listing, so if a
      seller's name appears in the description or in a photo, it is included.</p>
   <p><strong>Web search.</strong> This is off by default. If you turn it on in the options, Claude
@@ -98,6 +93,8 @@
     <li><code>storage</code>, for your settings, history, and temporary results.</li>
     <li><code>sidePanel</code>, for its interface.</li>
     <li><code>scripting</code>, to load its scripts into a listing tab that was already open.</li>
+    <li><code>activeTab</code>, for temporary access to the current tab when you use the
+        extension.</li>
   </ul>
 
   <h2>Changes</h2>
