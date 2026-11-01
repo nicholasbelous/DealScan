@@ -9,7 +9,7 @@ import { parseLabels, saveLabels } from "./labels.js";
 const args = process.argv.slice(2);
 const dbFlag = args.indexOf("--db");
 const dbPath = dbFlag >= 0 ? args[dbFlag + 1] : "server/data/dealscan.db";
-const file = args.find((arg, i) => !arg.startsWith("--") && i !== dbFlag + 1);
+const file = args.find((arg, i) => !arg.startsWith("--") && (dbFlag < 0 || i !== dbFlag + 1));
 
 if (!file) {
   console.error("Usage: npm run eval:import -- <file.csv> [--db path]");

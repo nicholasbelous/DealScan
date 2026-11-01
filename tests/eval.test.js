@@ -238,6 +238,15 @@ test("--mock runs end to end and marks its results as mock", () => {
   assert.ok(report.metrics.costAndLatency.costUsd.total > 0);
 });
 
+test("the import script works as documented, with no --db", () => {
+  const cwd = fs.mkdtempSync(path.join(tmp, "cwd-"));
+  const script = new URL("../eval/import-labels.js", import.meta.url).pathname;
+  const template = new URL("../eval/labels.template.csv", import.meta.url).pathname;
+  const res = spawnSync(process.execPath, [script, template], { encoding: "utf8", cwd });
+  assert.equal(res.status, 0, res.stderr);
+  assert.ok(fs.existsSync(path.join(cwd, "server/data/dealscan.db")));
+});
+
 test("the import script is all or nothing", () => {
   const db = path.join(tmp, "import.db");
   const bad = path.join(tmp, "bad.csv");
