@@ -64,10 +64,11 @@ export function parseListing(raw) {
   };
 }
 
-/** "$1,234.56" → 1234.56. Returns null when unparseable. */
-function parsePrice(text) {
+/** "$1,234.56" → 1234.56, "Free" → 0. Returns null when unparseable. */
+export function parsePrice(text) {
   if (text == null) return null;
-  const m = String(text).match(/[\d,]+(?:\.\d{1,2})?/);
+  if (/^\s*free\s*$/i.test(String(text))) return 0;
+  const m = String(text).match(/\d[\d,]*(?:\.\d{1,2})?/);
   if (!m) return null;
   const n = Number(m[0].replace(/,/g, ""));
   return Number.isFinite(n) ? n : null;
