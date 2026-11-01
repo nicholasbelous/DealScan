@@ -179,7 +179,7 @@ index.html, privacy-policy.html  GitHub Pages site, served from the repo root
 privacy-policy-next.html         policy for this code, replaces privacy-policy.html at release
 ```
 
-`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and model output validation, with the API mocked. The scraper tests run against fake pages in headless Chrome. Without Chrome they skip on a developer's machine and fail in CI, where GitHub Actions runs `npm test` on every push and pull request. The tests don't call the Anthropic API.
+`npm test` runs the tests in `tests/` and `server/tests/` with Node's built-in test runner, after `npm install` for the server's dependencies. They cover price parsing, the reliability gate, listing normalization, and model output validation, with the API mocked. The scraper tests run against fake pages in headless Chrome. Without Chrome they skip on a developer's machine and fail in CI, where GitHub Actions runs `npm test` on every push and pull request. The tests don't call the Anthropic API.
 
 ## Data and privacy
 
@@ -200,10 +200,8 @@ Narrowing the match would need the `webNavigation` permission and code that inje
 
 **None of this is built yet.**
 
-- Scraper fixture tests and CI
-- Schema validation of model output with one retry, and delimiters around seller-written text
-- Usage data stored with each history entry
+- Explicit side panel states, with each result tied to its item ID and cleared on navigation
+- Scraper tests against saved, sanitized listing pages
+- Photos from the verified listing panel
 - Red and green flags and negotiation tips in the result
-- Explicit side panel states, with results tied to an item ID
-- Optional backend that holds the API key, caches results, logs usage, and enforces a spend limit
-- Evaluation harness and a stats page
+- Recording gate rejections, so rejection precision covers them
