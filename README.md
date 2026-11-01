@@ -10,20 +10,24 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 2. Clicking it opens the side panel, which starts the evaluation. Opening the panel from the toolbar icon, or moving to another listing with the panel open, only shows the listing title and an **Evaluate This Listing** button. No API call is made until you click.
 3. The panel asks the scraper for the listing, retrying briefly because Facebook loads listing data after navigation. The scraper uses three sources, in priority order:
    - Embedded page JSON, used only if the object's `id` matches the item ID in the URL.
-   - Meta tags, used only if `og:url` contains that item ID.
+   - The listing panel: the smallest container around a link with a `product_id` parameter that also holds a title and price, and no links to other listings. Used only if that `product_id` matches the item ID in the URL. Only that parameter is read from the link.
    - The page itself, using the page title to find the listing title and the price next to it. This source is not tied to the item ID, so it only fills gaps.
-4. A read is accepted only if the page JSON or meta tags supplied a title and price for the item ID in the URL, and the page isn't mid-navigation. If no read passes before the retries run out, the panel shows the reason and a retry button, and makes no API call.
+4. A read is accepted only if the page JSON or listing panel supplied a title and price for the item ID in the URL, and an open panel doesn't name a different item. A panel read must also match the page title and, if a search card for the item is on the page, that card's title and price. If no read passes before the retries run out, the panel shows the reason and a retry button, and makes no API call.
 5. The service worker checks for a saved result for that listing URL from the last hour. If there is one, the panel shows it, marked "cached".
-6. Otherwise, if photo analysis is on, the service worker downloads up to three listing photos. Photos come only from the page JSON and the `og:image` tag. Photos that fail to download or are very small or very large are skipped.
+6. Otherwise, if photo analysis is on, the service worker downloads up to three listing photos. Photos come only from the page JSON, so a read verified only from the panel is evaluated without photos. Photos that fail to download or are very small or very large are skipped.
 7. The service worker sends the title, category, price, condition, parsed year and mileage, location, the start of the description, and any photos to the Anthropic API. It retries on rate limits, server errors, and network failures.
 8. Code then corrects the response: it takes the asking price from the scrape, clamps the score, calculates the percent above or below market, sets the verdict label from the score, and caps the suggested offer at the asking price.
 9. The panel shows the result. **Save** adds it to local history, and the re-run button makes a new API call.
 
 ### Known limitation
 
-The gate prefers refusing to guessing. A listing reached by in-app navigation can be rejected if Facebook hasn't provided page JSON or updated meta tags for it. Refreshing the page usually gets past this.
+The gate prefers refusing to guessing. A panel read is rejected if the panel contains links to other listings, such as a "more from this seller" section, because the panel's boundary can't then be trusted. Refreshing the page can get past this if Facebook provides page JSON after a reload.
 
-The gate covers the title and price. If the JSON or meta tags don't include the condition, location, or description, those fields can still come from the page itself, which is not tied to the item ID.
+Fields other than the title and price are not individually verified. After a panel read they come only from the panel. After a page JSON read, any the JSON lacks can come from the wider page, which is not tied to the item ID.
+
+Listings evaluated from a panel read have no photos.
+
+This logic is tested against fake pages in Chrome, not against saved Facebook HTML.
 
 ## Architecture
 
@@ -108,7 +112,7 @@ store-assets/                    Web Store images and source logo, not shipped
 index.html, privacy-policy.html  GitHub Pages site, served from the repo root
 ```
 
-`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and the response corrections. They don't call the Anthropic API, and nothing tests the scraper against page HTML yet.
+`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and the response corrections. The scraper tests run against fake pages in headless Chrome and are skipped if Chrome isn't installed. The tests don't call the Anthropic API.
 
 ## Data and privacy
 

@@ -8,15 +8,20 @@
 // present after in-app navigation). So we use THREE sources:
 //
 //   1. Embedded JSON  — walked to the object whose `id` === the URL item id.
-//   2. Meta tags      — trusted only when og:url names that same item id.
+//                       Usually present after a full page load.
+//   2. Listing panel  — the smallest container around a product_id link that
+//                       also holds a title and price, and no links to other
+//                       listings. Title, price, and ID all come from that one
+//                       container. Works after in-app navigation.
 //   3. DOM            — title taken from the page title, price read from the
 //                       element next to it. NOT tied to an item id, so it only
 //                       fills gaps and can never make a read trustworthy alone.
 //
-// Each source returns the same shape; we coalesce field-by-field by priority.
-// The scraper only reports what it saw: `verifiedItemId` (the id of a JSON or
-// meta source that supplied both title and price) and `transitioning`. The
-// decision to trust the read is made in one place, checkRead() in parser.js.
+// The scraper only reports what it saw. The decision to trust the read is made
+// in one place, checkRead() in parser.js.
+//
+// PRIVACY: product_id links are the seller's profile links. We extract only the
+// product_id parameter and never read, keep, or log the rest of the URL.
 //
 // Classic script (no ES modules in content scripts). Exposes one message:
 //   { type: "SCRAPE_LISTING" } → { ok, data: rawListing }
@@ -31,82 +36,68 @@
   function scrapeListing() {
     const itemId = currentItemId();
 
-    // Build each source independently (any may be null). Priority order:
-    // verified JSON → verified meta → page-title-anchored DOM.
+    // Build each source independently (any may be null).
     const jsonNode = itemId ? findListingNode(itemId) : null;
-    const sources = [
-      jsonNode ? sourceFromJson(jsonNode) : null,
-      fromMeta(itemId),
-      fromDom(),
-    ].filter(Boolean);
+    const json = jsonNode ? sourceFromJson(jsonNode) : null;
+    const panel = itemId ? findListingPanel() : null;
+    const panelMatches = panel?.itemIds.length === 1 && panel.itemIds[0] === itemId;
+    const panelSource = panelMatches ? sourceFromPanel(panel, itemId) : null;
+    const dom = fromDom();
 
+    // The first source tied to the URL's item id with BOTH title and price.
+    // Title and price are taken from it alone, never mixed across sources.
+    const verified = [json, panelSource].find((s) => s && s.title && s.price) ?? null;
+    const verifiedBy = verified?.via ?? null;
+
+    // A verified panel fills the other fields itself: the wider page could
+    // hold text from other listings in the feed behind it.
+    const sources = [json, panelSource, panelSource ? null : dom].filter(Boolean);
     const pick = (field) => {
       for (const s of sources) {
         if (s[field] != null && s[field] !== "") return s[field];
       }
       return null;
     };
-    // Merge photos across sources so a single-photo meta source can't cap us
-    // at one image. Canonical JSON photos first, then meta's primary — deduped.
-    // We never scavenge arbitrary page <img>s (they pull in ads/rails and
-    // poison the evaluation), so only these two verified sources contribute.
-    const mergeImages = () => {
-      const byVia = {};
-      for (const s of sources) byVia[s.via] = Array.isArray(s.images) ? s.images : [];
-      const seen = new Set();
-      const out = [];
-      for (const via of ["json", "meta"]) {
-        for (const u of byVia[via] || []) {
-          if (!seen.has(u)) {
-            seen.add(u);
-            out.push(u);
-          }
-        }
-      }
-      return out.slice(0, 6);
-    };
 
-    const title = pick("title");
-    const price = pick("price");
+    const title = verified?.title ?? pick("title");
+    const price = verified?.price ?? pick("price");
 
-    // The id of an item-id-pinned source (JSON or meta) that supplied BOTH the
-    // title and price. Those sources only return data for THIS item, so they
-    // can't be stale from a previous listing. The DOM source has no item id, so
-    // a DOM-only read leaves this null and the gate rejects it.
-    const verifiedItemId =
-      sources.find((s) => s.itemId && s.title && s.price)?.itemId ?? null;
-
-    // True when the page's og:url still names a DIFFERENT item than the URL —
-    // i.e. Facebook hasn't finished swapping to the clicked listing yet.
-    const transitioning = isTransitioning(itemId);
+    // The open panel names a DIFFERENT item than the URL: Facebook hasn't
+    // finished swapping to the clicked listing yet.
+    const transitioning = !!panel && panel.itemIds.length > 0 && !panel.itemIds.includes(itemId);
 
     // Vehicle facts (mileage/year) — extracted reliably and sent as explicit
     // fields so pricing never depends on the messy free-text description.
-    const titleEl = title ? findElementByText(title) : null;
+    const titleEl = panelSource?.titleEl ?? (title ? findElementByText(title) : null);
     const attributes = extractAttributes(title, titleEl);
 
     const data = {
       url: location.href,
-      verifiedItemId,
+      verifiedItemId: verified?.itemId ?? null,
+      verifiedBy,
       transitioning,
+      // Cross-checks on a panel read. Evaluated by the gate, never stored or sent.
+      titleInDocument: titleInDocument(title),
+      feedCardLabel: panelSource ? feedCardLabel(itemId, panel.el) : null,
       title,
       price,
       description: pick("description"),
       condition: pick("condition"),
       location: pick("location"),
       attributes,
-      images: mergeImages(),
+      // Photos only from the canonical JSON; see the note in fromDom().
+      images: json?.images ?? [],
     };
 
     // Lightweight diagnostics so failures are reportable from the page console.
     try {
       console.debug("[DealScan] scrape", {
         itemId,
-        verifiedItemId,
+        verifiedBy,
         transitioning,
         title,
         price,
-        via: sources.map((s) => s.via),
+        via: [json, panelSource, dom].filter(Boolean).map((s) => s.via),
       });
     } catch {
       /* console may be unavailable */
@@ -123,7 +114,7 @@
 
   function sourceFromJson(node) {
     return {
-      via: "json",
+      via: "embedded_data",
       itemId: node.id,
       title: node.marketplace_listing_title ?? node.custom_title ?? null,
       price: extractJsonPrice(node.listing_price),
@@ -241,52 +232,86 @@
     return urls.slice(0, 6);
   }
 
-  // === SOURCE 2: meta tags (og:url-verified) ==================================
+  // === SOURCE 2: the listing panel (product_id-verified) ======================
 
-  function fromMeta(itemId) {
-    // Trust meta ONLY if it's for this exact item (handles stale tags after
-    // in-app navigation, where og:url still points at the first-loaded item).
-    if (!itemId || ogItemId() !== itemId) return null;
+  function findListingPanel() {
+    for (const link of document.querySelectorAll('a[href*="product_id="]')) {
+      const panel = panelAround(link);
+      if (panel) return { ...panel, itemIds: productIdsIn(panel.el) };
+    }
+    return null;
+  }
 
-    const title = cleanTitleString(metaContent("og:title"));
-    if (!title) return null;
+  // Climb from a product_id link to the smallest container that also holds a
+  // title and price. Stop at the first ancestor linking to any listing: that
+  // is the feed or a search card, whose IDs belong to other listings.
+  function panelAround(link) {
+    let node = link.parentElement;
+    for (; node && node !== document.body; node = node.parentElement) {
+      if (node.querySelector('a[href*="/marketplace/item/"]')) return null;
+      const found = panelTitleAndPrice(node);
+      if (found) return { el: node, ...found };
+    }
+    return null;
+  }
 
-    const amount = metaContent("product:price:amount") || metaContent("og:price:amount");
-    const currency =
-      metaContent("product:price:currency") || metaContent("og:price:currency") || "USD";
-    const image = metaContent("og:image");
+  function panelTitleAndPrice(scope) {
+    for (const el of scope.querySelectorAll('h1, h2, [role="heading"]')) {
+      const title = el.textContent.replace(/\s+/g, " ").trim();
+      const price = title ? firstPriceAfter(scope, el) : null;
+      if (price) return { titleEl: el, title, price };
+    }
+    // FB sometimes renders the title in a plain span.
+    const docTitle = normalizeText(stripDocumentTitle(document.title));
+    for (const el of scope.querySelectorAll("span, div")) {
+      if (el.childElementCount > 1 || normalizeText(el.textContent) !== docTitle) continue;
+      const price = firstPriceAfter(scope, el);
+      if (price) return { titleEl: el, title: el.textContent.trim(), price };
+    }
+    return null;
+  }
 
+  // Only the product_id parameter leaves this function.
+  function productIdsIn(scope) {
+    const ids = new Set();
+    for (const a of scope.querySelectorAll('a[href*="product_id="]')) {
+      try {
+        const id = new URL(a.getAttribute("href"), location.origin).searchParams.get("product_id");
+        if (id && /^\d+$/.test(id)) ids.add(id);
+      } catch {
+        /* malformed href — ignore */
+      }
+    }
+    return [...ids];
+  }
+
+  function sourceFromPanel(panel, itemId) {
     return {
-      via: "meta",
+      via: "panel_product_id",
       itemId,
-      title,
-      price: amount ? formatAmount(amount, currency) : null,
-      description: metaContent("og:description"),
-      condition: null,
-      location: null,
-      images: image && /^https:\/\//.test(image) ? [image] : [],
+      titleEl: panel.titleEl,
+      title: panel.title,
+      price: panel.price,
+      description: longestDetailText(panel.el),
+      condition: labeledValueDom("Condition", panel.el),
+      location: locationFromDom(panel.el),
     };
   }
 
-  function metaContent(prop) {
-    const el =
-      document.querySelector(`meta[property="${prop}"]`) ||
-      document.querySelector(`meta[name="${prop}"]`);
-    const content = el?.getAttribute("content");
-    return content && content.trim() ? content.trim() : null;
+  // The search card for this exact item, if one is still on the page behind
+  // the panel. Its label reads "<title>, <price>, <location>, listing <id>".
+  function feedCardLabel(itemId, panelEl) {
+    const cardHref = new RegExp(`/marketplace/item/${itemId}(?:[/?]|$)`);
+    for (const a of document.querySelectorAll('a[aria-label][href*="/marketplace/item/"]')) {
+      if (!panelEl.contains(a) && cardHref.test(a.getAttribute("href"))) {
+        return a.getAttribute("aria-label");
+      }
+    }
+    return null;
   }
 
-  // After an in-app click, og:url can still point at the previously-open item
-  // for a beat. If it names a DIFFERENT item id than the URL, the page is
-  // mid-swap and DOM reads aren't trustworthy yet.
-  function isTransitioning(itemId) {
-    const ogId = ogItemId();
-    return !!(ogId && itemId && ogId !== itemId);
-  }
-
-  function ogItemId() {
-    const m = metaContent("og:url")?.match(/\/item\/(\d+)/);
-    return m ? m[1] : null;
+  function titleInDocument(title) {
+    return !!title && normalizeText(stripDocumentTitle(document.title)).includes(normalizeText(title));
   }
 
   // === SOURCE 3: DOM anchored on the page title ===============================
@@ -310,30 +335,28 @@
       // banners (a Chevy ad, stock scenery, etc.) as the listing's own photos —
       // and feeding those to Claude reads as a mismatched/scam listing and
       // produces a false "Avoid". Real photos come only from the canonical
-      // JSON listing_photos and the verified meta og:image.
-      images: [],
+      // JSON listing_photos.
     };
   }
 
-  // document.title tracks the open listing across in-app navigation; og:title
-  // is a fallback for the initial load.
+  // document.title tracks the open listing across in-app navigation.
   function listingTitleFromDoc() {
-    return cleanTitleString(document.title) || cleanTitleString(metaContent("og:title"));
-  }
-
-  function cleanTitleString(raw) {
-    if (!raw) return null;
-    let t = raw
-      .replace(/^\(\d+\)\s*/, "") // "(7) "
-      .replace(/\s*\|\s*Facebook.*$/i, "") // "| Facebook ..."
-      .replace(/\s*[-–—]\s*Facebook\b.*$/i, "") // "- Facebook Marketplace"
-      .replace(/^Marketplace\s*[-–—|]\s*/i, "") // "Marketplace - "
-      .trim();
+    const t = stripDocumentTitle(document.title);
     if (!t) return null;
     if (/^(marketplace|facebook|facebook marketplace|search results|buy and sell)/i.test(t)) {
       return null;
     }
     return t;
+  }
+
+  // In-app: "(1) Marketplace - <title> | Facebook". After a reload: "<title>".
+  function stripDocumentTitle(raw) {
+    return (raw || "")
+      .replace(/^\(\d+\)\s*/, "") // "(7) "
+      .replace(/\s*\|\s*Facebook.*$/i, "") // "| Facebook ..."
+      .replace(/\s*[-–—]\s*Facebook\b.*$/i, "") // "- Facebook Marketplace"
+      .replace(/^Marketplace\s*[-–—|]\s*/i, "") // "Marketplace - "
+      .trim();
   }
 
   // Facebook's full DOM has thousands of span/div nodes; scanning it on every
@@ -382,14 +405,15 @@
       }
       const txt = node.textContent.trim();
       if (txt.length > 25) continue; // skip prose that merely mentions a price
+      if (/^free$/i.test(txt)) return txt;
       const m = txt.match(PRICE_RE);
       if (m) return m[0];
     }
     return null;
   }
 
-  function labeledValueDom(label) {
-    for (const root of searchRoots()) {
+  function labeledValueDom(label, scope) {
+    for (const root of scope ? [scope] : searchRoots()) {
       for (const el of root.querySelectorAll("span, div")) {
         const t = el.textContent?.trim() ?? "";
         if (
@@ -405,16 +429,15 @@
     return null;
   }
 
-  function locationFromDom() {
-    const m = document.body.textContent.match(/Listed[^·\n]*?\bin\s+([A-Z][\w\s.,'-]{2,40})/);
+  function locationFromDom(scope = document.body) {
+    const m = scope.textContent.match(/Listed[^·\n]*?\bin\s+([A-Z][\w\s.,'-]{2,40})/);
     return m ? m[1].trim() : null;
   }
 
-  function longestDetailText() {
+  function longestDetailText(
+    scope = document.querySelector('div[role="main"]') || document.body
+  ) {
     let best = null;
-    const scope =
-      document.querySelector('div[role="main"]') || document.querySelector("body");
-    if (!scope) return null;
     for (const el of scope.querySelectorAll("span, div")) {
       if (el.childElementCount > 0) continue;
       const t = el.textContent?.trim() ?? "";

@@ -32,6 +32,11 @@
      the page address. Reading the listing does not send it anywhere. If no structured description
      is available, the extension uses the longest block of text on the page as the description,
      which could include other text from the page.</p>
+  <p>To confirm it is reading the right listing, the extension reads the listing ID from links on
+     the listing's page and ignores the rest of those links. These links can point to the seller's
+     profile, but the extension does not read, store, log, or send the seller's profile ID. It also
+     compares the listing's title and price with the page title and with any search result for the
+     same listing on the page. These checks stay in your browser.</p>
   <p>The extension's scripts load on all facebook.com pages so they can detect when you move to a
      listing without a page reload. On other pages they check only the page address and do not
      read page content.</p>

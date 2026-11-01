@@ -87,6 +87,42 @@ test("gate accepts a Free listing", () => {
   assert.equal(checkRead(goodRead({ price: "Free" })).reliable, true);
 });
 
+test("gate rejects a panel read whose title isn't in document.title", () => {
+  const { reliable, reason } = checkRead(
+    goodRead({ verifiedBy: "panel_product_id", titleInDocument: false })
+  );
+  assert.equal(reliable, false);
+  assert.match(reason, /page title/);
+});
+
+const panelRead = (feedCardLabel) =>
+  goodRead({
+    verifiedBy: "panel_product_id",
+    titleInDocument: true,
+    title: "Fake Bike",
+    price: "$1,200",
+    feedCardLabel,
+  });
+
+test("gate accepts a panel read with no feed card", () => {
+  assert.equal(checkRead(panelRead(null)).reliable, true);
+});
+
+test("gate accepts a feed card that agrees, including a comma in the title", () => {
+  assert.equal(checkRead(panelRead("Fake Bike, $1,200, Faketown, listing 123")).reliable, true);
+  const read = { ...panelRead("Red, fast bike, $1,200, Faketown, listing 123"), title: "Red, fast bike" };
+  assert.equal(checkRead(read).reliable, true);
+});
+
+test("gate rejects a feed card that disagrees on price or title", () => {
+  assert.match(checkRead(panelRead("Fake Bike, $900, Faketown, listing 123")).reason, /search result/);
+  assert.match(checkRead(panelRead("Other Bike, $1,200, Faketown, listing 123")).reason, /search result/);
+});
+
+test("gate doesn't reject on a feed card price it can't parse", () => {
+  assert.equal(checkRead(panelRead("Fake Bike, Faketown, listing 123")).reliable, true);
+});
+
 // --- parseListing -------------------------------------------------------------
 
 test("parseListing normalizes a good read", () => {
@@ -105,6 +141,14 @@ test("parseListing carries the gate's decision and reason", () => {
   const listing = parseListing(goodRead({ verifiedItemId: "456" }));
   assert.equal(listing.reliable, false);
   assert.match(listing.rejectReason, /different listing/);
+});
+
+test("parseListing records the verification method only when reliable", () => {
+  assert.equal(parseListing(goodRead({ verifiedBy: "embedded_data" })).verifiedBy, "embedded_data");
+  assert.equal(
+    parseListing(goodRead({ verifiedBy: "embedded_data", verifiedItemId: "456" })).verifiedBy,
+    null
+  );
 });
 
 test("parseListing keeps a Free listing at price 0", () => {
