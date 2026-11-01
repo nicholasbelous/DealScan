@@ -42,6 +42,16 @@ function feedCardAgrees(label, title, price) {
   return cardPrice == null || cardPrice === parsePrice(price);
 }
 
+/**
+ * What the local log keeps about a failed read: the reason, the method, and the
+ * URL's item ID. Never any listing content. Null if the read passed.
+ */
+export function toGateRejection(raw) {
+  const { reliable, reason } = checkRead(raw);
+  if (reliable) return null;
+  return { reason, verifiedBy: raw.verifiedBy ?? null, itemId: itemIdFromUrl(raw.url) };
+}
+
 export function itemIdFromUrl(url) {
   const m = String(url ?? "").match(/\/marketplace\/item\/(\d+)/);
   return m ? m[1] : null;

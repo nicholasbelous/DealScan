@@ -21,3 +21,13 @@ export function summarizeCost(records) {
     total: costs.reduce((sum, c) => sum + c, 0),
   };
 }
+
+/** The most common reasons in a log, most frequent first. */
+export function topReasons(records, limit = 3) {
+  const counts = new Map();
+  for (const { reason } of records) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  return [...counts]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason))
+    .slice(0, limit);
+}

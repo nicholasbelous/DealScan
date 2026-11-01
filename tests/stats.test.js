@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { median, p90, percentile, summarizeCost } from "../src/shared/stats.js";
+import { median, p90, percentile, summarizeCost, topReasons } from "../src/shared/stats.js";
 
 test("nearest-rank percentiles", () => {
   const values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
@@ -28,4 +28,14 @@ test("summarizes cost and skips unknown costs", () => {
   });
   assert.equal(summarizeCost([{ costUsd: null }]), null);
   assert.equal(summarizeCost([]), null);
+});
+
+test("ranks reasons by count, then alphabetically, up to the limit", () => {
+  const log = ["b", "a", "b", "c", "d"].map((reason) => ({ reason }));
+  assert.deepEqual(topReasons(log, 3), [
+    { reason: "b", count: 2 },
+    { reason: "a", count: 1 },
+    { reason: "c", count: 1 },
+  ]);
+  assert.deepEqual(topReasons([]), []);
 });

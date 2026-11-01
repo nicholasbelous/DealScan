@@ -100,6 +100,10 @@
         prompt version, token counts, number of web searches and attempts, time taken, and
         calculated cost. It contains no listing content. You can export it or clear it from the
         extension's options.</li>
+    <li><strong>Read rejection log</strong> (<code>chrome.storage.local</code>): when the extension
+        refuses to trust a read, the time, the reason, how it tried to verify the read, and the
+        listing ID. It contains no other listing content. You can export it or clear it from the
+        extension's options.</li>
     <li><strong>Temporary results</strong> (<code>chrome.storage.session</code>): recent results,
         keyed by listing address, so reopening a listing doesn't repeat the request. These are
         cleared when the browser closes.</li>

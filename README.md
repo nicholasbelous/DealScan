@@ -117,19 +117,20 @@ npm run eval -- --confirm-paid   # real API calls, needs ANTHROPIC_API_KEY
 
 It reports the price-range hit rate (how often your range overlaps the model's), score variance (5 listings run 5 times each), rejection precision, and cost and latency median and p90, including retries. Results go to `eval/results/<date>-<prompt_version>.json`. No results from real runs exist yet, so this repo makes no accuracy claims. Mock results are marked and aren't committed.
 
-Limits: a label needs a listing already evaluated through the server, because the CSV has no asking price. Evaluations use stored text without photos, because the server keeps none. Rejection precision only covers rejected model answers, because the extension's gate rejections aren't recorded anywhere.
+Limits: a label needs a listing already evaluated through the server, because the CSV has no asking price. Evaluations use stored text without photos, because the server keeps none. Rejection precision only covers rejected model answers. The extension logs gate rejections locally, but the harness doesn't read that log yet.
 
 ## Features
 
 - **History tab:** search saved evaluations by title, filter by category, open or remove them. Each saved entry also records the model, prompt version, token counts, web searches, attempts, latency, and cost calculated from the pricing table in `src/shared/pricing.js`. The History tab shows each entry's cost.
 - **Usage log:** every billed evaluation, saved or not, is logged locally with its status, tokens, and cost. The History tab shows the median, p90, and total from this log, so they include retries and rejected answers. Results served from the cache aren't logged, because they cost nothing.
+- **Read rejection log:** each refused read is logged locally with its time, reason, verification method, and item ID, and no listing content. The History tab shows the top reasons, and Options can export the log.
 - **Explicit states:** the panel is always in exactly one of not on Marketplace, reading, ready, evaluating, result, rejected, or error. Rejected means DealScan chose not to trust something. Error means something failed. See `src/shared/panel-state.js`.
 - **Options page:**
   - API key
   - model: Haiku 4.5 (default), Sonnet 4.6, or Opus 4.8
   - photo analysis (on by default)
   - live web search for prices (off by default)
-  - export history or the usage log as JSON, or clear them
+  - export history, the usage log, or read rejections as JSON, or clear them
 
 With web search off, Claude estimates prices from its own knowledge, not from current listings.
 
@@ -207,4 +208,4 @@ Narrowing the match would need the `webNavigation` permission and code that inje
 - Scraper tests against saved, sanitized listing pages
 - Photos from the verified listing panel
 - Red and green flags and negotiation tips in the result
-- Recording gate rejections, so rejection precision covers them
+- Feeding the read rejection log into the eval harness, so rejection precision covers gate rejections

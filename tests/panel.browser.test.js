@@ -155,7 +155,7 @@ test("RACE: A's verdict arriving after moving to B never appears", opts, async (
 
   await release(0, verdictFor("Verdict for A"));
 
-  assert.notEqual(await visibleState(), "state-result");
+  assert.ok(["state-reading", "state-ready"].includes(await visibleState()), await visibleState());
   assert.equal((await text("v-summary")).includes("Verdict for A"), false);
 
   await waitForState("ready");
@@ -241,6 +241,25 @@ test("a double click on evaluate sends one request", opts, async () => {
   await waitFor(async () => (await pendingCount()) >= 1, "the evaluation request");
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(await pendingCount(), 1);
+});
+
+test("a refused read is logged with no listing content, and its reason appears in History", opts, async () => {
+  await page.evaluate(`window.__t.read = (url) => ({
+    url, verifiedItemId: null, verifiedBy: null, transitioning: false,
+    title: "Fake Secret Title", price: "$123", description: "Fake secret description",
+  })`);
+  await navigateTo(URL_B);
+  await waitForState("rejected");
+  await waitFor(() => page.evaluate(`chrome.storage.local.get("gateRejections").then((r) => (r.gateRejections ?? []).length > 0)`), "the log");
+
+  const [record] = await page.evaluate(`chrome.storage.local.get("gateRejections").then((r) => r.gateRejections)`);
+  assert.deepEqual(Object.keys(record).sort(), ["at", "itemId", "reason", "verifiedBy"]);
+  assert.equal(record.itemId, "1110002");
+  assert.equal(JSON.stringify(record).includes("Fake Secret"), false);
+  assert.equal(JSON.stringify(record).includes("123"), false);
+
+  await click("tab-history");
+  await waitFor(async () => (await text("history-rejections")).includes("confirm"), "the History line");
 });
 
 test("rejected and error show different messages", opts, async () => {

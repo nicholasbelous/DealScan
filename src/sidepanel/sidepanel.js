@@ -11,7 +11,7 @@
 import { checkRead, itemIdFromUrl } from "../shared/gate.js";
 import { PANEL_STATES, initialPanelState, isBusy, panelReducer } from "../shared/panel-state.js";
 import { parseListing } from "../shared/parser.js";
-import { summarizeCost } from "../shared/stats.js";
+import { summarizeCost, topReasons } from "../shared/stats.js";
 import { toHistoryEntry } from "../shared/verdict.js";
 import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
 import {
@@ -23,6 +23,8 @@ import {
   truncate,
 } from "../shared/formatter.js";
 import {
+  appendGateRejection,
+  getGateRejections,
   getHistory,
   getUsageLog,
   addToHistory,
@@ -218,7 +220,9 @@ async function readActiveListing() {
   try {
     const raw = await scrapeSettled(tab.id, run);
     if (state.run !== run) return null;
-    dispatch({ type: "read-finished", run, listing: parseListing(raw) });
+    const listing = parseListing(raw);
+    if (listing.gateRejection) appendGateRejection(listing.gateRejection);
+    dispatch({ type: "read-finished", run, listing });
     return state.run === run && state.name === "ready" ? state.listing : null;
   } catch (err) {
     dispatch({ type: "read-failed", run, message: String(err.message ?? err) });
@@ -430,8 +434,17 @@ async function renderCostSummary() {
     `total ${formatCost(summary.total)}. Includes retries and rejected answers.`;
 }
 
+async function renderGateSummary() {
+  const log = await getGateRejections();
+  $("history-rejections").classList.toggle("hidden", log.length === 0);
+  if (log.length === 0) return;
+  const top = topReasons(log).map(({ reason, count }) => `${reason} (${count})`).join(" ");
+  $("history-rejections").textContent = `Most common reasons a read was refused, of ${log.length}: ${top}`;
+}
+
 async function renderHistory() {
   renderCostSummary();
+  renderGateSummary();
   const all = await getHistory();
   const query = $("history-search").value.trim().toLowerCase();
   const category = $("history-filter").value;

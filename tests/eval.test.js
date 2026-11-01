@@ -125,7 +125,7 @@ test("rejection precision: rejected listings my labels call unreadable", () => {
   ]);
   assert.equal(p.hits, 1);
   assert.equal(p.total, 3);
-  assert.match(p.scope, /gate rejections/);
+  assert.match(p.scope, /gate rejection/);
   assert.equal(rejectionPrecision([]).rate, null);
 });
 

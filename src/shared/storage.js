@@ -8,9 +8,11 @@ const KEYS = {
   settings: "settings",
   history: "history",
   usageLog: "usageLog",
+  gateRejections: "gateRejections",
 };
 
 const USAGE_LOG_LIMIT = 500;
+const GATE_REJECTIONS_LIMIT = 500;
 
 const DEFAULT_SETTINGS = {
   // "direct": call Anthropic with anthropicKey. "server": call serverUrl with
@@ -89,6 +91,22 @@ export async function appendUsage(record) {
 
 export async function clearUsageLog() {
   await set(KEYS.usageLog, []);
+}
+
+// --- Gate rejections ---------------------------------------------------------
+// Why reads were refused: reason, verification method, and item ID only.
+
+export async function getGateRejections() {
+  return (await get(KEYS.gateRejections)) || [];
+}
+
+export async function appendGateRejection(record) {
+  const log = await getGateRejections();
+  await set(KEYS.gateRejections, [{ at: Date.now(), ...record }, ...log].slice(0, GATE_REJECTIONS_LIMIT));
+}
+
+export async function clearGateRejections() {
+  await set(KEYS.gateRejections, []);
 }
 
 // --- Low-level chrome.storage.local helpers ----------------------------------

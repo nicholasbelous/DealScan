@@ -1,7 +1,14 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { appendUsage, clearUsageLog, getUsageLog } from "../src/shared/storage.js";
+import {
+  appendGateRejection,
+  appendUsage,
+  clearGateRejections,
+  clearUsageLog,
+  getGateRejections,
+  getUsageLog,
+} from "../src/shared/storage.js";
 
 let store;
 
@@ -39,4 +46,15 @@ test("clears", async () => {
   await appendUsage({ status: "valid" });
   await clearUsageLog();
   assert.deepEqual(await getUsageLog(), []);
+});
+
+test("logs gate rejections newest first, separately from usage, and clears", async () => {
+  await appendGateRejection({ reason: "first", verifiedBy: null, itemId: "1" });
+  await appendGateRejection({ reason: "second", verifiedBy: "embedded_data", itemId: "2" });
+  const log = await getGateRejections();
+  assert.deepEqual(log.map((r) => r.reason), ["second", "first"]);
+  assert.deepEqual(Object.keys(log[0]).sort(), ["at", "itemId", "reason", "verifiedBy"]);
+  assert.deepEqual(await getUsageLog(), []);
+  await clearGateRejections();
+  assert.deepEqual(await getGateRejections(), []);
 });

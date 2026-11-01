@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { checkRead } from "../src/shared/gate.js";
+import { checkRead, toGateRejection } from "../src/shared/gate.js";
 import { parsePrice } from "../src/shared/normalize.js";
 import { canReuseVerdict, parseListing } from "../src/shared/parser.js";
 
@@ -156,6 +156,21 @@ test("parseListing records the verification method only when reliable", () => {
 test("parseListing carries the verified item ID only when reliable", () => {
   assert.equal(parseListing(goodRead()).itemId, "123");
   assert.equal(parseListing(goodRead({ verifiedItemId: "456" })).itemId, null);
+});
+
+test("a gate rejection record holds only the reason, method, and item ID", () => {
+  const raw = goodRead({ verifiedItemId: "456", verifiedBy: "panel_product_id" });
+  assert.deepEqual(toGateRejection(raw), {
+    reason: "The page data is for a different listing.",
+    verifiedBy: "panel_product_id",
+    itemId: "123",
+  });
+  assert.deepEqual(parseListing(raw).gateRejection, toGateRejection(raw));
+});
+
+test("a read that passes the gate has no rejection record", () => {
+  assert.equal(toGateRejection(goodRead()), null);
+  assert.equal(parseListing(goodRead()).gateRejection, null);
 });
 
 test("parseListing keeps a Free listing at price 0", () => {

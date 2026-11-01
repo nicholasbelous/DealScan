@@ -33,14 +33,14 @@ export function scoreVariance(results, runsPerListing) {
 
 /**
  * Of the listings rejected at least once, how many my labels call unreadable.
- * Covers rejected model answers in this run. The extension's gate rejections
- * happen in the browser and aren't recorded anywhere yet, so they're not counted.
+ * Covers rejected model answers in this run. Gate rejections are logged locally
+ * in the browser (exportable from Options) and aren't read here yet.
  */
 export function rejectionPrecision(results) {
   const rejected = results.filter((r) => r.runs.some((run) => run.status === "rejected"));
   return {
     ...rate(rejected.filter((r) => !r.label.readable).length, rejected.length),
-    scope: "rejected model answers only; gate rejections aren't recorded",
+    scope: "rejected model answers only; the extension's gate rejection log isn't included",
   };
 }
 

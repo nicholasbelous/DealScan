@@ -4,7 +4,7 @@
 // uses, and records the reliability gate's decision (gate.js) on it.
 
 import { detectCategory } from "./categories.js";
-import { checkRead } from "./gate.js";
+import { checkRead, toGateRejection } from "./gate.js";
 import { cleanText, parseCurrency, parsePrice } from "./normalize.js";
 
 /**
@@ -36,6 +36,7 @@ export function parseListing(raw) {
     itemId: reliable ? raw.verifiedItemId : null,
     reliable,
     rejectReason: reason,
+    gateRejection: toGateRejection(raw),
     verifiedBy: reliable ? raw.verifiedBy ?? null : null,
     title: title ?? "(untitled listing)",
     price: priceNumber,

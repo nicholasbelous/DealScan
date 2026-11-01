@@ -7,6 +7,8 @@ import {
   clearHistory,
   getUsageLog,
   clearUsageLog,
+  getGateRejections,
+  clearGateRejections,
 } from "../shared/storage.js";
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +30,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("toggle-key").addEventListener("click", toggleKeyVisibility);
   $("btn-export").addEventListener("click", exportHistory);
   $("btn-export-usage").addEventListener("click", exportUsageLog);
+  $("btn-export-rejections").addEventListener("click", exportGateRejections);
   $("btn-clear").addEventListener("click", clearAllHistory);
 
   $("version-label").textContent = `DealScan v${chrome.runtime.getManifest().version}`;
@@ -123,15 +126,22 @@ async function exportUsageLog() {
   $("data-status").textContent = `Exported ${log.length} usage record${log.length === 1 ? "" : "s"}.`;
 }
 
+async function exportGateRejections() {
+  const log = await getGateRejections();
+  downloadJson("dealscan-read-rejections", log);
+  $("data-status").textContent = `Exported ${log.length} read rejection${log.length === 1 ? "" : "s"}.`;
+}
+
 async function clearAllHistory() {
   const history = await getHistory();
-  const log = await getUsageLog();
-  if (history.length === 0 && log.length === 0) {
-    $("data-status").textContent = "History and usage log are already empty.";
+  const logCount = (await getUsageLog()).length + (await getGateRejections()).length;
+  if (history.length === 0 && logCount === 0) {
+    $("data-status").textContent = "History and logs are already empty.";
     return;
   }
-  if (!confirm(`Delete ${history.length} saved evaluations and ${log.length} usage records? This can't be undone.`)) return;
+  if (!confirm(`Delete ${history.length} saved evaluations and ${logCount} log records? This can't be undone.`)) return;
   await clearHistory();
   await clearUsageLog();
-  $("data-status").textContent = "History and usage log cleared.";
+  await clearGateRejections();
+  $("data-status").textContent = "History and logs cleared.";
 }
