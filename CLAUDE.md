@@ -1,9 +1,9 @@
 # DealScan: Project Context for Claude
 
 ## What This Is
-A Chrome extension (Manifest V3) that evaluates Facebook Marketplace listings with the Anthropic API, plus a small backend that holds the API key, caches results, and records every evaluation.
+A Chrome extension (Manifest V3) that evaluates Facebook Marketplace listings with the Anthropic API. A small backend that holds the API key, caches results, and records every evaluation is planned (see Roadmap). This file describes the target design; README.md describes what is built today.
 
-On user click, the extension reads the Marketplace listing currently on screen, gets an evaluation from Claude, and shows a deal score, verdict, price breakdown, red/green flags, and negotiation tips in a side panel.
+The extension reads the Marketplace listing currently on screen and, on user click, gets an evaluation from Claude and shows a deal score, verdict, price breakdown, and suggested offer in a side panel. Red/green flags and negotiation tips are planned.
 
 The core engineering problem is trust: the page read can be wrong, and the model can be wrong. The system's job is to know when not to trust either one, and to say so clearly instead of showing a confident wrong answer.
 
