@@ -17,7 +17,7 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 6. Otherwise, if photo analysis is on, the service worker downloads up to three listing photos. Photos come only from the page JSON, so a read verified only from the panel is evaluated without photos. Photos that fail to download or are very small or very large are skipped.
 7. The service worker sends the title, category, price, condition, parsed year and mileage, location, the start of the description, and any photos to the Anthropic API. It retries on rate limits, server errors, and network failures.
 8. Code then corrects the response: it takes the asking price from the scrape, clamps the score, calculates the percent above or below market, sets the verdict label from the score, and caps the suggested offer at the asking price.
-9. The panel shows the result. **Save** adds it to local history, and the re-run button makes a new API call.
+9. The panel shows the result, including which method verified the read (listing panel or page data). **Save** adds it to local history, and the re-run button makes a new API call.
 
 ### Known limitation
 

@@ -22,6 +22,10 @@ import {
 
 const LISTING_URL_RE = /facebook\.com\/marketplace\/item\//;
 const RING_CIRCUMFERENCE = 327; // 2πr, r=52 — matches the CSS dasharray
+const VERIFIED_BY_LABELS = {
+  panel_product_id: "Verified: listing panel",
+  embedded_data: "Verified: page data",
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -334,6 +338,7 @@ function renderVerdict(listing, v) {
   $("v-photos").textContent = photos > 0 ? `👁️ ${photos} photo${photos === 1 ? "" : "s"}` : "";
   $("v-photos").classList.toggle("hidden", photos === 0);
   $("v-cached").classList.toggle("hidden", !v.fromCache);
+  $("v-verified").textContent = VERIFIED_BY_LABELS[listing.verifiedBy] ?? "";
 
   // Score ring
   const score = v.score; // already clamped in claude.js (null when unknown)
