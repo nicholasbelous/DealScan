@@ -4,8 +4,12 @@
 // scrape → normalize via parser. If the scrape isn't reliable, REFUSE here
 // (show a notice, spend nothing). Otherwise hand off to the service worker,
 // which fetches photos and runs the Claude evaluation, then render the verdict.
+//
+// What's on screen comes only from the state machine in panel-state.js, which
+// also discards results for a listing the user has left.
 
-import { checkRead } from "../shared/gate.js";
+import { checkRead, itemIdFromUrl } from "../shared/gate.js";
+import { PANEL_STATES, initialPanelState, isBusy, panelReducer } from "../shared/panel-state.js";
 import { parseListing } from "../shared/parser.js";
 import { summarizeCost } from "../shared/stats.js";
 import { toHistoryEntry } from "../shared/verdict.js";
@@ -35,12 +39,17 @@ const VERIFIED_BY_LABELS = {
 
 const $ = (id) => document.getElementById(id);
 
-// What the Save button acts on.
-let current = { listing: null, verdict: null };
+let state = initialPanelState;
+
+function dispatch(event) {
+  state = panelReducer(state, event);
+  render();
+}
 
 // ---------- Boot ----------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", () => {
+  render();
   bindTabs();
   bindActions();
   populateCategoryFilter();
@@ -67,13 +76,28 @@ async function consumePendingEvaluate() {
   return pendingEvaluate;
 }
 
-// SPA navigation to another listing: PREVIEW it (free), don't auto-evaluate.
-// Passively browsing listings with the panel open must never spend money.
-let navDebounce = null;
+// Moving to another listing clears the old result at once, and any evaluation
+// still running for it is discarded when it returns. The new listing is only
+// PREVIEWED (free): passively browsing with the panel open must never spend money.
+const PREVIEW_DELAY_MS = 1200; // Facebook is still swapping the page right after a click
+let previewTimer = null;
+
+async function syncToActiveTab() {
+  const tab = await getListingTab();
+  const itemId = tab ? itemIdFromUrl(tab.url) : null;
+  if (itemId === state.itemId) return;
+
+  dispatch({ type: "navigated", itemId });
+  clearTimeout(previewTimer);
+  if (itemId) previewTimer = setTimeout(() => previewActiveTab(), PREVIEW_DELAY_MS);
+}
+
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type !== "LISTING_CHANGED") return;
-  clearTimeout(navDebounce);
-  navDebounce = setTimeout(() => previewActiveTab(), 1200);
+  if (message?.type === "LISTING_CHANGED") syncToActiveTab();
+});
+chrome.tabs.onActivated.addListener(() => syncToActiveTab());
+chrome.tabs.onUpdated.addListener((_tabId, change) => {
+  if (change.url) syncToActiveTab();
 });
 
 // ---------- Tabs -----------------------------------------------------------------
@@ -122,8 +146,8 @@ function bindActions() {
   $("btn-reevaluate").addEventListener("click", () => evaluateActiveTab({ force: true }));
 
   $("btn-save").addEventListener("click", async () => {
-    if (!current.verdict) return;
-    await addToHistory(toHistoryEntry(current.listing, current.verdict)); // dedupes by URL — safe to click twice
+    if (state.name !== "result") return;
+    await addToHistory(toHistoryEntry(state.listing, state.verdict)); // dedupes by URL — safe to click twice
     setSaved(true);
   });
 
@@ -149,89 +173,71 @@ async function refreshSavedState(url) {
 // Scrape the active listing and show it as "ready to evaluate" — no API call,
 // no spend. Used on panel open (via icon) and on SPA navigation.
 async function previewActiveTab() {
-  const tab = await getListingTab();
-  if (!tab) {
-    showState("idle");
-    return;
-  }
-  try {
-    const listing = await scrapeActiveListing(tab.id);
-    if (!listing.reliable) {
-      showRejected(listing);
-      return;
-    }
-    $("ready-title").textContent = truncate(listing.title, 60);
-    showState("ready");
-  } catch {
-    showState("idle");
-  }
+  if (state.name === "evaluating") return;
+  await readActiveListing();
 }
 
 // Scrape + evaluate (spends API credit). Triggered only by explicit user
 // action: the page's Evaluate button, the in-panel Evaluate button, or retry.
-let evaluating = false;
 async function evaluateActiveTab({ force = false } = {}) {
-  if (evaluating) return; // guard against rapid clicks double-charging
-  evaluating = true;
+  if (isBusy(state) && state.name !== "reading") return; // rapid clicks can't double-charge
+  clearTimeout(previewTimer);
 
+  const listing = await readActiveListing();
+  if (!listing) return;
+
+  dispatch({ type: "evaluate-started" });
+  const { run } = state;
   try {
-    const tab = await getListingTab();
-    if (!tab) {
-      showState("idle");
-      return;
-    }
-
-    showState("loading", "Reading listing…");
-    const listing = await scrapeActiveListing(tab.id);
-
-    // The reliability gate. Refuse rather than evaluate possibly-wrong data.
-    if (!listing.reliable) {
-      showRejected(listing);
-      return;
-    }
-
-    showState("loading", `Evaluating "${truncate(listing.title, 38)}"…`);
     const res = await chrome.runtime.sendMessage({
       type: "EVALUATE_LISTING",
       payload: listing,
       force,
     });
     if (res?.rejected) {
-      showAnswerRejected(res.error);
-      return;
+      dispatch({ type: "answer-rejected", run, reason: res.error });
+    } else if (!res?.ok) {
+      dispatch({ type: "evaluation-failed", run, message: res?.error ?? "Evaluation failed" });
+    } else {
+      dispatch({ type: "evaluated", run, verdict: res.data });
     }
-    if (!res?.ok) throw new Error(res?.error ?? "Evaluation failed");
-
-    current.verdict = res.data;
-    renderVerdict(listing, res.data);
-    showState("verdict");
-    refreshSavedState(listing.url);
   } catch (err) {
-    $("error-message").textContent = String(err.message ?? err);
-    showState("error");
-  } finally {
-    evaluating = false;
+    dispatch({ type: "evaluation-failed", run, message: String(err.message ?? err) });
   }
 }
 
-async function scrapeActiveListing(tabId) {
-  const raw = await scrapeSettled(tabId);
-  const listing = parseListing(raw);
-  current = { listing, verdict: null };
-  return listing;
+// The reliability gate runs inside parseListing. Returns a listing only if it
+// passed and the user is still on it.
+async function readActiveListing() {
+  const tab = await getListingTab();
+  dispatch({ type: "navigated", itemId: tab ? itemIdFromUrl(tab.url) : null });
+  if (!tab) return null;
+
+  dispatch({ type: "read-started" });
+  const { run } = state;
+  try {
+    const raw = await scrapeSettled(tab.id, run);
+    if (state.run !== run) return null;
+    dispatch({ type: "read-finished", run, listing: parseListing(raw) });
+    return state.run === run && state.name === "ready" ? state.listing : null;
+  } catch (err) {
+    dispatch({ type: "read-failed", run, message: String(err.message ?? err) });
+    return null;
+  }
 }
 
 // Facebook loads listing data asynchronously after an in-app click, so the
 // first read can be stale or mid-transition (this is why a refresh "fixed" it).
 // Retry briefly until a read passes the gate. If none does, return the last
-// read: parseListing runs the same gate on it, so the panel rejects it.
+// read: parseListing runs the same gate on it, so the panel rejects it. Stops
+// early if this read was superseded, so it doesn't keep polling a page.
 const SCRAPE_ATTEMPTS = 6;
 const SCRAPE_INTERVAL_MS = 450;
 const RELOAD_TIMEOUT_MS = 15000;
 
-async function scrapeSettled(tabId) {
+async function scrapeSettled(tabId, run) {
   let raw = null;
-  for (let i = 0; i < SCRAPE_ATTEMPTS; i++) {
+  for (let i = 0; i < SCRAPE_ATTEMPTS && state.run === run; i++) {
     raw = await sendToTab(tabId, { type: "SCRAPE_LISTING" });
     if (checkRead(raw).reliable) return raw;
     if (i < SCRAPE_ATTEMPTS - 1) await sleep(SCRAPE_INTERVAL_MS);
@@ -282,10 +288,10 @@ function sendMessageOnce(tabId, message) {
 async function reloadAndReread() {
   const tab = await getListingTab();
   if (!tab) {
-    showState("idle");
+    dispatch({ type: "navigated", itemId: null });
     return;
   }
-  showState("loading", "Reloading listing…");
+  dispatch({ type: "read-started" });
   await reloadTab(tab.id);
   await previewActiveTab();
 }
@@ -306,25 +312,40 @@ function reloadTab(tabId) {
   });
 }
 
-function showRejected(listing) {
-  $("rejected-title").textContent = "Couldn't read this listing";
-  $("rejected-reason").textContent = listing.rejectReason;
-  $("rejected-cost").textContent = "DealScan didn't evaluate it, so there's no charge.";
-  showState("unreliable");
-}
+// ---------- Rendering ---------------------------------------------------------------
 
-function showAnswerRejected(reason) {
-  $("rejected-title").textContent = "Couldn't trust this evaluation";
-  $("rejected-reason").textContent = reason;
-  $("rejected-cost").textContent = "No result is shown, but the API attempts may still be billed.";
-  showState("unreliable");
-}
+const REJECTION_TEXT = {
+  read: {
+    title: "Couldn't read this listing",
+    cost: "DealScan didn't evaluate it, so there's no charge.",
+  },
+  answer: {
+    title: "Couldn't trust this evaluation",
+    cost: "No result is shown, but the API attempts may still be billed.",
+  },
+};
 
-function showState(name, loadingLabel) {
-  ["idle", "loading", "ready", "unreliable", "error", "verdict"].forEach((s) =>
-    $(`state-${s}`).classList.toggle("hidden", s !== name)
-  );
-  if (loadingLabel) $("loading-label").textContent = loadingLabel;
+// Everything on the Evaluate tab is drawn from `state`, and nothing else.
+function render() {
+  for (const name of PANEL_STATES) {
+    $(`state-${name}`).classList.toggle("hidden", name !== state.name);
+  }
+
+  if (state.name === "ready") {
+    $("ready-title").textContent = truncate(state.listing.title, 60);
+  } else if (state.name === "evaluating") {
+    $("evaluating-label").textContent = `Evaluating "${truncate(state.listing.title, 38)}"…`;
+  } else if (state.name === "rejected") {
+    const text = REJECTION_TEXT[state.rejection.kind];
+    $("rejected-title").textContent = text.title;
+    $("rejected-reason").textContent = state.rejection.reason;
+    $("rejected-cost").textContent = text.cost;
+  } else if (state.name === "error") {
+    $("error-message").textContent = state.errorMessage;
+  } else if (state.name === "result") {
+    renderVerdict(state.listing, state.verdict);
+    refreshSavedState(state.listing.url);
+  }
 }
 
 // ---------- Verdict rendering --------------------------------------------------------
@@ -340,7 +361,7 @@ function renderVerdict(listing, v) {
   $("v-verified").textContent = VERIFIED_BY_LABELS[listing.verifiedBy] ?? "";
 
   // Score ring
-  const score = v.score; // already clamped in claude.js (null when unknown)
+  const score = v.score;
   const color = scoreColor(score);
   const ring = $("ring-fill");
   ring.style.stroke = color;

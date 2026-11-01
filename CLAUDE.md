@@ -123,6 +123,8 @@ Store the minimum needed. No seller names, no profile URLs, no raw page HTML.
 - Write results to `eval/results/<date>-<prompt_version>.json`. Only these files may back any accuracy or cost claim in docs.
 
 ## Roadmap (do in order)
+Done so far: 1, 3, 4, 5, 6, and 7, except where noted. Milestone 2 still needs fixtures of real pages (see `scripts/sanitize-fixture.js`). No real eval run exists, so 6 has produced no numbers yet.
+
 1. **Truth fixes.** Reliability gate requires a verified item ID. Remove stale docs (watchlist, eBay, nonexistent tests folder). Make README and privacy policy match the code. Keep the content script match documented (see Architecture).
 2. **Tests and CI** for existing pure functions, plus scraper fixtures.
 3. **Validation and safety.** JSON schema validation with one retry, `finalizeVerdict` consistency, delimited seller text, adversarial tests. Store `usage` in history entries.

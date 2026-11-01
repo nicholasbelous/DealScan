@@ -21,7 +21,7 @@
   <main id="view-evaluate" class="view active" role="tabpanel" aria-labelledby="tab-evaluate">
 
     <!-- State: not on a listing page -->
-    <section id="state-idle" class="hidden">
+    <section id="state-not_marketplace" class="hidden">
       <div class="empty-card">
         <p class="empty-icon">🛍️</p>
         <p class="empty-title">No listing open</p>
@@ -30,11 +30,19 @@
       </div>
     </section>
 
-    <!-- State: working -->
-    <section id="state-loading" class="hidden">
+    <!-- State: read in progress, or the page is mid-navigation -->
+    <section id="state-reading" class="hidden">
       <div class="empty-card">
         <div class="spinner" role="status" aria-label="Working"></div>
-        <p id="loading-label">Reading listing…</p>
+        <p>Reading listing…</p>
+      </div>
+    </section>
+
+    <!-- State: request sent to Claude or the server -->
+    <section id="state-evaluating" class="hidden">
+      <div class="empty-card">
+        <div class="spinner" role="status" aria-label="Working"></div>
+        <p id="evaluating-label">Evaluating…</p>
       </div>
     </section>
 
@@ -48,8 +56,8 @@
       </div>
     </section>
 
-    <!-- State: couldn't read listing reliably (refuse, no spend) -->
-    <section id="state-unreliable" class="hidden">
+    <!-- State: the read or Claude's answer wasn't trusted -->
+    <section id="state-rejected" class="hidden">
       <div class="empty-card">
         <p class="empty-icon">🔍</p>
         <p id="rejected-title" class="empty-title"></p>
@@ -71,7 +79,7 @@
     </section>
 
     <!-- State: verdict (bare essentials) -->
-    <section id="state-verdict" class="hidden">
+    <section id="state-result" class="hidden">
       <div class="listing-summary">
         <h2 id="v-title">Listing title</h2>
         <p class="listing-meta">

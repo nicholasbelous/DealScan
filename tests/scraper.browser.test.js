@@ -5,12 +5,10 @@
 
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
 
+import { IN_CI, findChrome, launchChrome } from "../scripts/lib/chrome.js";
 import { parseListing } from "../src/shared/parser.js";
 
 const ITEM = "1110001";
@@ -18,16 +16,7 @@ const PREVIOUS = "1110002";
 const SELLER = "9990009";
 const TITLE = "Fake Road Bike";
 
-const IN_CI = Boolean(process.env.CI);
-const CHROME = (
-  process.env.CHROME_PATH
-    ? [process.env.CHROME_PATH]
-    : [
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "/usr/bin/google-chrome",
-        "/usr/bin/chromium",
-      ]
-).find((p) => fs.existsSync(p));
+const CHROME = findChrome();
 
 // The real content scripts, in manifest order, minus the two with side effects.
 const manifest = JSON.parse(fs.readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
@@ -49,25 +38,12 @@ const page = (body, title = `(1) Marketplace - ${TITLE} | Facebook`) =>
   `<!doctype html><title>${title}</title><div role="main">${body}</div>`;
 
 let pages = {};
-let server, chrome, sessionId, tmp, port;
-let msgId = 0;
-const pending = {};
-
-function send(method, params = {}, session) {
-  return new Promise((resolve) => {
-    const id = ++msgId;
-    pending[id] = resolve;
-    chrome.stdio[3].write(`${JSON.stringify({ id, method, params, sessionId: session })}\0`);
-  });
-}
+let server, chrome, tab, port;
 
 async function scrape(html) {
   pages[ITEM] = html;
-  await send("Page.enable", {}, sessionId);
-  const loaded = new Promise((resolve) => (pending.load = resolve));
-  await send("Page.navigate", { url: `http://localhost:${port}/marketplace/item/${ITEM}/?ref=x` }, sessionId);
-  await loaded;
-  const expression = `(() => {
+  await tab.navigate(`http://localhost:${port}/marketplace/item/${ITEM}/?ref=x`);
+  const out = await tab.evaluate(`(() => {
     let handler;
     window.chrome = { runtime: { onMessage: { addListener: (h) => (handler = h) } } };
     console.debug = () => {};
@@ -75,10 +51,8 @@ async function scrape(html) {
     let out;
     handler({ type: "SCRAPE_LISTING" }, null, (r) => (out = r));
     return out;
-  })()`;
-  const res = await send("Runtime.evaluate", { expression, returnByValue: true }, sessionId);
-  const out = res.result.result.value;
-  assert.equal(out?.ok, true, JSON.stringify(res.result.exceptionDetails ?? out));
+  })()`);
+  assert.equal(out?.ok, true, JSON.stringify(out));
   return out.data;
 }
 
@@ -95,42 +69,13 @@ before(async () => {
     })
     .listen(0);
   port = server.address().port;
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dealscan-test-"));
-  chrome = spawn(
-    CHROME,
-    [
-      "--headless=new",
-      "--no-first-run",
-      "--disable-gpu",
-      `--user-data-dir=${tmp}`,
-      "--remote-debugging-pipe",
-      ...(IN_CI ? ["--no-sandbox"] : []), // CI runners don't allow Chrome's sandbox
-      "about:blank",
-    ],
-    { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"] }
-  );
-  let buf = "";
-  chrome.stdio[4].on("data", (d) => {
-    buf += d;
-    let i;
-    while ((i = buf.indexOf("\0")) >= 0) {
-      const m = JSON.parse(buf.slice(0, i));
-      buf = buf.slice(i + 1);
-      if (m.method === "Page.loadEventFired") pending.load?.();
-      if (pending[m.id]) {
-        pending[m.id](m);
-        delete pending[m.id];
-      }
-    }
-  });
-  const { result } = await send("Target.createTarget", { url: "about:blank" });
-  sessionId = (await send("Target.attachToTarget", { targetId: result.targetId, flatten: true })).result.sessionId;
+  chrome = await launchChrome(CHROME);
+  tab = await chrome.newPage();
 });
 
 after(() => {
-  chrome?.kill();
+  chrome?.close();
   server?.close();
-  if (tmp) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 3 });
 });
 
 const opts = { skip: CHROME || IN_CI ? false : "Chrome not found" };

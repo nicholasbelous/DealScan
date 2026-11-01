@@ -42,7 +42,7 @@ function feedCardAgrees(label, title, price) {
   return cardPrice == null || cardPrice === parsePrice(price);
 }
 
-function itemIdFromUrl(url) {
+export function itemIdFromUrl(url) {
   const m = String(url ?? "").match(/\/marketplace\/item\/(\d+)/);
   return m ? m[1] : null;
 }

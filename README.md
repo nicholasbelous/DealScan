@@ -18,7 +18,7 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 7. The service worker sends, with seller-written text marked in the prompt as untrusted data, the title, category, price, condition, parsed year and mileage, location, the start of the description, and any photos to the Anthropic API. It retries on rate limits, server errors, and network failures.
 8. Code validates the answer: required fields, a whole-number score from 0 to 100, a market range with low at or below high, a reasonable offer, a verdict that matches the score, and no good score on an above-market price. An invalid answer gets one retry, which is billed. If that also fails, or Claude declines, the panel shows the reason and no result.
    Code then replaces what it can compute: the asking price from the scrape, the percent above or below market, the verdict label from the score, and an offer capped at the asking price.
-9. The panel shows the result, including which method verified the read (listing panel or page data). **Save** adds it to local history, and the re-run button makes a new API call.
+9. The panel shows the result, including which method verified the read (listing panel or page data). The result is tied to that listing's item ID: moving to another listing or tab clears it at once, and if an evaluation is still running when you move, its answer is discarded when it returns. That call is still billed, and its answer stays in the one-hour cache. **Save** adds it to local history, and the re-run button makes a new API call.
 
 ### Known limitation
 
@@ -68,6 +68,8 @@ Options page --> chrome.storage.local <-- service worker reads key and settings
 **Model output validated in code.** The API can enforce the JSON shape, but not ranges or whether an answer contradicts itself. So code rejects invalid answers and computes the arithmetic itself. The tradeoffs are that a retry costs a second API call, and that these rules don't check whether the market estimate itself is right. Web search mode doesn't send the JSON schema, because search results carry citations and the API docs list citations as incompatible with a JSON format, so it relies on the prompt and code validation.
 
 **Same validation in both modes.** The server imports the prompt, validation, and pricing from `src/shared/`, so direct and server mode can't drift apart. The tradeoff is that shared code must stay free of browser-only and server-only calls, and the server has to be deployed alongside any change to it.
+
+**Results bound to a run, not just a screen.** Every read and evaluation gets a run number, and navigating starts a new one, so a late answer can't land on the wrong listing. The tradeoff is that the discarded call was still paid for: it isn't cancelled, though its answer is cached if you go back.
 
 **Evaluate only on an explicit click.** Browsing listings with the panel open never spends API credit. The tradeoff is an extra click when the panel is opened from the toolbar icon or after moving to another listing.
 
@@ -121,6 +123,7 @@ Limits: a label needs a listing already evaluated through the server, because th
 
 - **History tab:** search saved evaluations by title, filter by category, open or remove them. Each saved entry also records the model, prompt version, token counts, web searches, attempts, latency, and cost calculated from the pricing table in `src/shared/pricing.js`. The History tab shows each entry's cost.
 - **Usage log:** every billed evaluation, saved or not, is logged locally with its status, tokens, and cost. The History tab shows the median, p90, and total from this log, so they include retries and rejected answers. Results served from the cache aren't logged, because they cost nothing.
+- **Explicit states:** the panel is always in exactly one of not on Marketplace, reading, ready, evaluating, result, rejected, or error. Rejected means DealScan chose not to trust something. Error means something failed. See `src/shared/panel-state.js`.
 - **Options page:**
   - API key
   - model: Haiku 4.5 (default), Sonnet 4.6, or Opus 4.8
@@ -166,6 +169,7 @@ src/
   shared/verdict.js              output schema, validation, finalizeVerdict
   shared/pricing.js              price table and cost calculation
   shared/gate.js                 the reliability gate: can this read be trusted
+  shared/panel-state.js          side panel state machine, drops stale results
   shared/parser.js               normalizes the scrape into a listing
   shared/normalize.js            price and text cleanup
   shared/storage.js              settings and history in chrome.storage.local
@@ -200,7 +204,6 @@ Narrowing the match would need the `webNavigation` permission and code that inje
 
 **None of this is built yet.**
 
-- Explicit side panel states, with each result tied to its item ID and cleared on navigation
 - Scraper tests against saved, sanitized listing pages
 - Photos from the verified listing panel
 - Red and green flags and negotiation tips in the result
