@@ -50,6 +50,28 @@ export function recordEvaluation(db, row) {
   );
 }
 
+/** The newest real (not itself cached) valid verdict for this exact content. */
+export function findCachedVerdict(db, { itemId, contentHash, model, promptVersion }, since) {
+  const row = db
+    .prepare(
+      `SELECT raw_response FROM evaluations
+       WHERE item_id = ? AND content_hash = ? AND model = ? AND prompt_version = ?
+         AND status = 'valid' AND cache_hit = 0 AND created_at >= ?
+       ORDER BY created_at DESC, id DESC LIMIT 1`
+    )
+    .get(itemId, contentHash, model, promptVersion, since);
+  return row ? JSON.parse(row.raw_response) : null;
+}
+
+export function evaluationsSince(db, since) {
+  return db
+    .prepare(
+      `SELECT status, rejection_reason, cost_usd, latency_ms, attempts, cache_hit
+       FROM evaluations WHERE created_at >= ?`
+    )
+    .all(since);
+}
+
 /** USD spent since the start of the current UTC day, across all tokens. */
 export function spentToday(db, now) {
   const dayStart = new Date(now).setUTCHours(0, 0, 0, 0);

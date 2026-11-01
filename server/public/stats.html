@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DealScan server stats</title>
+  <link rel="stylesheet" href="/stats.css" />
+</head>
+<body>
+  <h1>DealScan server stats</h1>
+  <form id="form">
+    <label>Token <input id="token" type="password" autocomplete="off" required /></label>
+    <label>Window
+      <select id="window">
+        <option value="24h">Last 24 hours</option>
+        <option value="7d" selected>Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+        <option value="all">All time</option>
+      </select>
+    </label>
+    <button>Show</button>
+  </form>
+  <p id="message" role="status"></p>
+  <table id="summary" hidden><tbody></tbody></table>
+  <h2 id="reasons-heading" hidden>Top rejection reasons</h2>
+  <table id="reasons" hidden><tbody></tbody></table>
+  <script src="/stats.js"></script>
+</body>
+</html>

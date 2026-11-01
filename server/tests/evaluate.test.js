@@ -138,7 +138,7 @@ test("budget cap: stops before calling the API once today's spend reaches it", a
   assert.equal((await post({ listing: LISTING })).statusCode, 200);
   assert.ok(rows(db)[0].cost_usd >= config.dailyBudgetUsd);
 
-  const res = await post({ listing: LISTING });
+  const res = await post({ listing: { ...LISTING, price: 90 } });
   assert.equal(res.statusCode, 429);
   assert.equal(res.json().code, "budget_exceeded");
   assert.equal(calls.length, 1);

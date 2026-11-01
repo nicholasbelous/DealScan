@@ -110,7 +110,8 @@ async function evaluateAndLogUsage(listing, images) {
       settings.mode === "server"
         ? await evaluateViaServer(settings, listing, images)
         : await evaluateListing(listing, images);
-    await appendUsage({ status: "valid", ...verdict.evaluation });
+    // A server cache hit cost nothing, so it would only flatter the median.
+    if (!verdict.fromCache) await appendUsage({ status: "valid", ...verdict.evaluation });
     return verdict;
   } catch (err) {
     if (err.evaluation?.inputTokens > 0) {

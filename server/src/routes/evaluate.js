@@ -3,14 +3,15 @@
 // The listing arrives already verified by the extension. The body schema refuses
 // any field it doesn't name, so seller data can't get in even by mistake. The
 // model's answer goes through the same validation as direct mode, and everything
-// billed is recorded, whatever the outcome.
+// billed is recorded, whatever the outcome. Identical content is answered from
+// the cache, which costs nothing and so isn't subject to the budget.
 
 import { DEFAULT_MODEL, runEvaluation } from "../../../src/shared/anthropic.js";
 import { contentHash } from "../../../src/shared/cache-key.js";
-import { MODEL_PRICES } from "../../../src/shared/pricing.js";
+import { MODEL_PRICES, emptyUsage } from "../../../src/shared/pricing.js";
 import { PROMPT_VERSION } from "../../../src/shared/prompt.js";
 import { VerdictRejectedError } from "../../../src/shared/verdict.js";
-import { recordEvaluation, rememberListing, spentToday } from "../store.js";
+import { findCachedVerdict, recordEvaluation, rememberListing, spentToday } from "../store.js";
 
 const nullableString = (maxLength) => ({ type: ["string", "null"], maxLength });
 
@@ -57,6 +58,16 @@ const bodySchema = {
   },
 };
 
+// What a cache hit cost: nothing, so nothing reached the API.
+const freeEvaluation = ({ model, promptVersion }) => ({
+  model,
+  promptVersion,
+  ...emptyUsage(),
+  attempts: 0,
+  latencyMs: 0,
+  costUsd: 0,
+});
+
 export function registerEvaluateRoute(app, { db, config, now }) {
   app.post("/v1/evaluate", { schema: { body: bodySchema } }, async (req, reply) => {
     const { listing, images = [], model = DEFAULT_MODEL } = req.body;
@@ -71,6 +82,13 @@ export function registerEvaluateRoute(app, { db, config, now }) {
     };
 
     rememberListing(db, listing.itemId, hash, listing, at);
+
+    const cached = findCachedVerdict(db, base, at - config.cacheTtlMs);
+    if (cached) {
+      const verdict = { ...cached, fromCache: true, evaluation: freeEvaluation(base) };
+      recordEvaluation(db, { ...base, status: "valid", verdict, evaluation: verdict.evaluation, cacheHit: true, now: at });
+      return { status: "valid", verdict };
+    }
 
     if (spentToday(db, at) >= config.dailyBudgetUsd) {
       recordEvaluation(db, { ...base, status: "error", reason: "budget_exceeded", now: at });

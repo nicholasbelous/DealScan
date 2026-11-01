@@ -79,7 +79,8 @@ Direct mode is the default: the extension calls Anthropic with your own key, and
 
 - **Key custody:** the Anthropic key lives only on the server, so friends can use DealScan with a token and never hold a key.
 - **Measurement:** every evaluation is recorded with its outcome, tokens, cost, and latency, so cost and rejection claims can come from data.
-- **Spending control:** a daily budget cap stops evaluations when it's reached. The server won't start without one.
+- **Spending control:** a daily budget cap stops evaluations when it's reached. The server won't start without one. Each token is also rate limited.
+- **Shared cache:** when anyone evaluates identical content, the server reuses the answer at no cost. The cache key is the item ID, a hash of the listing's normalized content including photos, the model, and the prompt version, so a changed price, description, or photo is a miss.
 
 **Run it:**
 
@@ -92,9 +93,11 @@ npm start --workspace server
 
 In the extension's Options, choose **Server**, enter the URL and token, and save. Chrome asks for permission to reach that server. The URL must use HTTPS, or HTTP on localhost.
 
-**Endpoints:** `POST /v1/evaluate` takes the listing and any photos, and returns a validated verdict, a rejection, or a typed error such as `budget_exceeded`. `GET /v1/evaluations/:itemId` returns the latest evaluation for an item. `GET /healthz` needs no token. Every other route needs `Authorization: Bearer <token>`.
+**Endpoints:** `POST /v1/evaluate` takes the listing and any photos, and returns a validated verdict, a rejection, or a typed error such as `budget_exceeded`. `GET /v1/evaluations/:itemId` returns the latest evaluation for an item. `GET /v1/stats?window=24h|7d|30d|all` returns evaluations by status, top rejection reasons, cost and latency median and p90, and cache hit rate. Cost and latency cover only requests that reached the API, including retries and rejected answers. `GET /stats` is a simple page that shows the same numbers. It holds no data until you enter a token, and any valid token can read these server-wide totals. `GET /healthz` and the stats page's files need no token. Every other route needs `Authorization: Bearer <token>`.
 
 **What it stores:** SQLite tables for listings (item ID, title, price, condition, category, description), evaluations, and hashed tokens. It never receives or stores seller data, and it rejects requests with fields it doesn't recognize. It doesn't store photos, and it never contacts Facebook: the extension downloads photos and sends them along. Web search isn't available in server mode.
+
+Cache entries last an hour by default (`CACHE_TTL_SECONDS`). The rate limit defaults to 30 requests per minute per token (`RATE_LIMIT_PER_MINUTE`), counted in memory, so it resets when the server restarts. These are configuration defaults, not measurements.
 
 The budget check runs before each evaluation, so requests already in progress can take spending slightly past the cap.
 

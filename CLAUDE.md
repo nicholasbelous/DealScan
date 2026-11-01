@@ -97,7 +97,7 @@ Store the minimum needed. No seller names, no profile URLs, no raw page HTML.
 - In direct mode, store `usage` with each history entry, and log every billed evaluation in the local usage log (including retries and rejections), so cost can be measured without the server.
 
 ## Observability
-`GET /v1/stats` and a simple server-rendered stats page show, over a selectable window:
+`GET /v1/stats` and a simple stats page (static files that fetch with a token, so the page itself holds no data and the token never goes in a URL) show, over a selectable window:
 - Evaluation count, by status (valid / rejected / error)
 - Rejection reasons, ranked
 - Cost per evaluation: median and p90

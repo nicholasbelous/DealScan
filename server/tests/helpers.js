@@ -50,7 +50,13 @@ export function mockAnthropic(...replies) {
 
 export function setup(overrides = {}) {
   const db = openDb(":memory:");
-  const config = { anthropicKey: "sk-ant-fake-server-key", dailyBudgetUsd: 1, ...overrides.config };
+  const config = {
+    anthropicKey: "sk-ant-fake-server-key",
+    dailyBudgetUsd: 1,
+    cacheTtlMs: 3_600_000,
+    rateLimitPerMinute: 1000,
+    ...overrides.config,
+  };
   const app = buildApp({ db, config, ...overrides.app });
   const token = createToken(db, "fake-user");
   const post = (body, authToken = token) =>

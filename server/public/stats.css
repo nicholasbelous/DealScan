@@ -1,0 +1,8 @@
+body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #20302a; }
+form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+input, select, button { padding: 8px 10px; font: inherit; }
+table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #e4dfd2; font-variant-numeric: tabular-nums; }
+th { font-weight: 500; }
+h2 { font-size: 16px; margin-top: 28px; }
