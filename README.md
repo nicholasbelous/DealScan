@@ -11,8 +11,8 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 3. The panel asks the scraper for the listing, retrying briefly because Facebook loads listing data after navigation. The scraper uses three sources, in priority order:
    - Embedded page JSON, used only if the object's `id` matches the item ID in the URL.
    - Meta tags, used only if `og:url` contains that item ID.
-   - The page itself, using the page title to find the listing title and the price next to it. This source is not tied to the item ID.
-4. If no title or price can be read, the panel says it couldn't read the listing and makes no API call.
+   - The page itself, using the page title to find the listing title and the price next to it. This source is not tied to the item ID, so it only fills gaps.
+4. A read is accepted only if the page JSON or meta tags supplied a title and price for the item ID in the URL, and the page isn't mid-navigation. If no read passes before the retries run out, the panel shows the reason and a retry button, and makes no API call.
 5. The service worker checks for a saved result for that listing URL from the last hour. If there is one, the panel shows it, marked "cached".
 6. Otherwise, if photo analysis is on, the service worker downloads up to three listing photos. Photos come only from the page JSON and the `og:image` tag. Photos that fail to download or are very small or very large are skipped.
 7. The service worker sends the title, category, price, condition, parsed year and mileage, location, the start of the description, and any photos to the Anthropic API. It retries on rate limits, server errors, and network failures.
@@ -21,7 +21,9 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 
 ### Known limitation
 
-An item ID match is not required. If only the page source has data, the panel looks for two matching reads in a row, but if it runs out of retries it can still accept the last read as long as that read has a title and a price. In that case the result could describe the wrong listing, so check that the title and price in the panel match the page.
+The gate prefers refusing to guessing. A listing reached by in-app navigation can be rejected if Facebook hasn't provided page JSON or updated meta tags for it. Refreshing the page usually gets past this.
+
+The gate covers the title and price. If the JSON or meta tags don't include the condition, location, or description, those fields can still come from the page itself, which is not tied to the item ID.
 
 ## Architecture
 
@@ -127,7 +129,6 @@ Narrowing the match would need the `webNavigation` permission and code that inje
 
 **None of this is built yet.**
 
-- Require a verified item ID before accepting a read
 - Unit tests, scraper fixtures, and CI
 - Schema validation of model output with one retry, and delimiters around seller-written text
 - Usage data stored with each history entry

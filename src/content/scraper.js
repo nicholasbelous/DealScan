@@ -5,19 +5,18 @@
 // (search results, "more like this", the open listing) and loads listing data
 // dynamically. A naive "first price / biggest font" read can lock onto the
 // WRONG item; relying only on embedded JSON refuses too often (the JSON isn't
-// present after in-app navigation). So we use THREE sources, and EVERY one is
-// verified to belong to the listing in the URL before we trust it:
+// present after in-app navigation). So we use THREE sources:
 //
 //   1. Embedded JSON  — walked to the object whose `id` === the URL item id.
-//   2. Meta tags      — trusted only when og:url contains that same item id.
-//   3. DOM            — title taken from the page title (which tracks the open
-//                       listing), price read from the element next to it.
+//   2. Meta tags      — trusted only when og:url names that same item id.
+//   3. DOM            — title taken from the page title, price read from the
+//                       element next to it. NOT tied to an item id, so it only
+//                       fills gaps and can never make a read trustworthy alone.
 //
 // Each source returns the same shape; we coalesce field-by-field by priority.
-// Because all three are pinned to the current item id / page title, a value
-// can never come from a neighboring listing. Only when NO source yields both a
-// title and a price do we mark confidence "low" — the panel then refuses
-// rather than guess.
+// The scraper only reports what it saw: `verifiedItemId` (the id of a JSON or
+// meta source that supplied both title and price) and `transitioning`. The
+// decision to trust the read is made in one place, checkRead() in parser.js.
 //
 // Classic script (no ES modules in content scripts). Exposes one message:
 //   { type: "SCRAPE_LISTING" } → { ok, data: rawListing }
@@ -69,16 +68,13 @@
 
     const title = pick("title");
     const price = pick("price");
-    const confidence = title && price ? "high" : "low";
 
-    // "verified" = an item-id-pinned source (JSON or meta) supplied BOTH the
+    // The id of an item-id-pinned source (JSON or meta) that supplied BOTH the
     // title and price. Those sources only return data for THIS item, so they
-    // can't be stale from a previous listing. The DOM source isn't pinned, so
-    // right after an in-app click it can briefly hold the old listing — the
-    // side panel waits for a verified or stable read before trusting it.
-    const verified = sources.some(
-      (s) => (s.via === "json" || s.via === "meta") && s.title && s.price
-    );
+    // can't be stale from a previous listing. The DOM source has no item id, so
+    // a DOM-only read leaves this null and the gate rejects it.
+    const verifiedItemId =
+      sources.find((s) => s.itemId && s.title && s.price)?.itemId ?? null;
 
     // True when the page's og:url still names a DIFFERENT item than the URL —
     // i.e. Facebook hasn't finished swapping to the clicked listing yet.
@@ -91,8 +87,7 @@
 
     const data = {
       url: location.href,
-      confidence,
-      verified,
+      verifiedItemId,
       transitioning,
       title,
       price,
@@ -107,8 +102,7 @@
     try {
       console.debug("[DealScan] scrape", {
         itemId,
-        confidence,
-        verified,
+        verifiedItemId,
         transitioning,
         title,
         price,
@@ -130,6 +124,7 @@
   function sourceFromJson(node) {
     return {
       via: "json",
+      itemId: node.id,
       title: node.marketplace_listing_title ?? node.custom_title ?? null,
       price: extractJsonPrice(node.listing_price),
       description: node.redacted_description?.text ?? null,
@@ -249,10 +244,9 @@
   // === SOURCE 2: meta tags (og:url-verified) ==================================
 
   function fromMeta(itemId) {
-    const ogUrl = metaContent("og:url");
     // Trust meta ONLY if it's for this exact item (handles stale tags after
     // in-app navigation, where og:url still points at the first-loaded item).
-    if (!itemId || !ogUrl || !ogUrl.includes(itemId)) return null;
+    if (!itemId || ogItemId() !== itemId) return null;
 
     const title = cleanTitleString(metaContent("og:title"));
     if (!title) return null;
@@ -264,6 +258,7 @@
 
     return {
       via: "meta",
+      itemId,
       title,
       price: amount ? formatAmount(amount, currency) : null,
       description: metaContent("og:description"),
@@ -285,9 +280,13 @@
   // for a beat. If it names a DIFFERENT item id than the URL, the page is
   // mid-swap and DOM reads aren't trustworthy yet.
   function isTransitioning(itemId) {
-    const ogUrl = metaContent("og:url");
-    const m = ogUrl && ogUrl.match(/\/item\/(\d+)/);
-    return !!(m && itemId && m[1] !== itemId);
+    const ogId = ogItemId();
+    return !!(ogId && itemId && ogId !== itemId);
+  }
+
+  function ogItemId() {
+    const m = metaContent("og:url")?.match(/\/item\/(\d+)/);
+    return m ? m[1] : null;
   }
 
   // === SOURCE 3: DOM anchored on the page title ===============================

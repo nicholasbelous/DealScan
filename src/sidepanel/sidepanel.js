@@ -5,7 +5,7 @@
 // (show a notice, spend nothing). Otherwise hand off to the service worker,
 // which fetches photos and runs the Claude evaluation, then render the verdict.
 
-import { parseListing } from "../shared/parser.js";
+import { parseListing, checkRead } from "../shared/parser.js";
 import { categoryLabel, ALL_CATEGORIES } from "../shared/categories.js";
 import {
   formatMoney,
@@ -163,7 +163,7 @@ async function previewActiveTab() {
   try {
     const listing = await scrapeActiveListing(tab.id);
     if (!listing.reliable) {
-      showState("unreliable");
+      showRejected(listing);
       return;
     }
     $("ready-title").textContent = truncate(listing.title, 60);
@@ -192,7 +192,7 @@ async function evaluateActiveTab({ force = false } = {}) {
 
     // The reliability gate. Refuse rather than evaluate possibly-wrong data.
     if (!listing.reliable) {
-      showState("unreliable");
+      showRejected(listing);
       return;
     }
 
@@ -225,29 +225,19 @@ async function scrapeActiveListing(tabId) {
 
 // Facebook loads listing data asynchronously after an in-app click, so the
 // first read can be stale or mid-transition (this is why a refresh "fixed" it).
-// Accept immediately when an item-id-verified source is present (the refresh
-// case); otherwise retry briefly until two consecutive DOM-only reads agree and
-// the page is no longer mid-swap. Settles fast in practice; refuses (rather
-// than misfires) only if the page never stabilizes.
+// Retry briefly until a read passes the gate. If none does, return the last
+// read: parseListing runs the same gate on it, so the panel rejects it.
 const SCRAPE_ATTEMPTS = 6;
 const SCRAPE_INTERVAL_MS = 450;
 
 async function scrapeSettled(tabId) {
-  let prev = null;
+  let raw = null;
   for (let i = 0; i < SCRAPE_ATTEMPTS; i++) {
-    const raw = await sendToTab(tabId, { type: "SCRAPE_LISTING" });
-    if (raw.verified) return raw; // pinned to the URL's item id — trust now
-    const stable =
-      raw.confidence === "high" &&
-      !raw.transitioning &&
-      prev &&
-      prev.title === raw.title &&
-      prev.price === raw.price;
-    if (stable) return raw;
-    prev = raw;
+    raw = await sendToTab(tabId, { type: "SCRAPE_LISTING" });
+    if (checkRead(raw).reliable) return raw;
     if (i < SCRAPE_ATTEMPTS - 1) await sleep(SCRAPE_INTERVAL_MS);
   }
-  return prev; // best effort — the parser's reliability gate handles the rest
+  return raw;
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -290,6 +280,11 @@ function sendMessageOnce(tabId, message) {
       }
     });
   });
+}
+
+function showRejected(listing) {
+  $("rejected-reason").textContent = listing.rejectReason;
+  showState("unreliable");
 }
 
 function showState(name, loadingLabel) {

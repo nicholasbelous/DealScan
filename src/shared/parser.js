@@ -1,11 +1,37 @@
 // Listing parser for DealScan.
 //
 // Normalizes the raw scrape into the clean schema the rest of the extension
-// uses. Crucially it also surfaces a `reliable` flag derived from the
-// scraper's confidence: the side panel refuses to evaluate (and refuses to
-// spend API credit) when this is false, rather than risk a wrong verdict.
+// uses. Crucially it also holds the reliability gate, checkRead(): the side
+// panel refuses to evaluate (and refuses to spend API credit) when a read
+// fails it, rather than risk a verdict on the wrong listing.
 
 import { detectCategory } from "./categories.js";
+
+/**
+ * The reliability gate. A read is trusted only if a source tied to an item id
+ * matches the item id in the URL, the page isn't mid-navigation, and the two
+ * fields the verdict depends on are present.
+ * @param {object} raw - output of scraper.js scrapeListing().
+ * @returns {{reliable: boolean, reason: string|null}} reason is user-facing.
+ */
+export function checkRead(raw) {
+  const reject = (reason) => ({ reliable: false, reason });
+
+  if (raw.transitioning) return reject("The page was still switching to this listing.");
+  const urlItemId = itemIdFromUrl(raw.url);
+  if (!urlItemId) return reject("This page's address doesn't include a listing ID.");
+  if (!raw.verifiedItemId) return reject("Couldn't confirm the page data belongs to this listing.");
+  if (raw.verifiedItemId !== urlItemId) return reject("The page data is for a different listing.");
+  if (cleanText(raw.title) == null || parsePrice(raw.price) == null) {
+    return reject("Couldn't find this listing's title and price.");
+  }
+  return { reliable: true, reason: null };
+}
+
+function itemIdFromUrl(url) {
+  const m = String(url ?? "").match(/\/marketplace\/item\/(\d+)/);
+  return m ? m[1] : null;
+}
 
 /**
  * Normalize a raw scraped listing.
@@ -19,14 +45,12 @@ export function parseListing(raw) {
   const priceNumber = parsePrice(raw.price);
   const description = cleanText(raw.description);
 
-  // Reliable only when the scraper verified the listing against the URL's
-  // item ID AND we actually have the two fields the verdict depends on.
-  const reliable =
-    raw.confidence === "high" && title != null && priceNumber != null;
+  const { reliable, reason } = checkRead(raw);
 
   return {
     url: stripTracking(raw.url),
     reliable,
+    rejectReason: reason,
     title: title ?? "(untitled listing)",
     price: priceNumber,
     priceRaw: raw.price ?? null,

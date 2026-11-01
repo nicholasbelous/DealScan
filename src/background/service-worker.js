@@ -68,7 +68,7 @@ async function handleEvaluate(listing, force) {
   if (!listing) throw new Error("No listing data provided");
   // Belt-and-suspenders: the panel already gates on this, but never evaluate
   // an unreliable scrape here either.
-  if (listing.reliable === false) {
+  if (!listing.reliable) {
     throw new Error("Listing data could not be read reliably.");
   }
 
