@@ -107,7 +107,7 @@ function activateTab(tab) {
 
 function bindActions() {
   $("btn-retry").addEventListener("click", () => evaluateActiveTab());
-  $("btn-reload").addEventListener("click", () => evaluateActiveTab());
+  $("btn-reload").addEventListener("click", () => reloadAndReread());
   $("btn-evaluate-now").addEventListener("click", () => evaluateActiveTab());
   $("btn-reevaluate").addEventListener("click", () => evaluateActiveTab({ force: true }));
 
@@ -229,6 +229,7 @@ async function scrapeActiveListing(tabId) {
 // read: parseListing runs the same gate on it, so the panel rejects it.
 const SCRAPE_ATTEMPTS = 6;
 const SCRAPE_INTERVAL_MS = 450;
+const RELOAD_TIMEOUT_MS = 15000;
 
 async function scrapeSettled(tabId) {
   let raw = null;
@@ -279,6 +280,35 @@ function sendMessageOnce(tabId, message) {
         resolve(res.data);
       }
     });
+  });
+}
+
+// Reload the listing and read it again. Stops at the preview: a retry after a
+// rejection only re-reads, so it never spends API credit on its own.
+async function reloadAndReread() {
+  const tab = await getListingTab();
+  if (!tab) {
+    showState("idle");
+    return;
+  }
+  showState("loading", "Reloading listing…");
+  await reloadTab(tab.id);
+  await previewActiveTab();
+}
+
+function reloadTab(tabId) {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      resolve();
+    };
+    const onUpdated = (id, change) => {
+      if (id === tabId && change.status === "complete") done();
+    };
+    const timer = setTimeout(done, RELOAD_TIMEOUT_MS);
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.reload(tabId);
   });
 }
 
