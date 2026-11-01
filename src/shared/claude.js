@@ -141,7 +141,7 @@ export async function evaluateListing(listing, images = []) {
 //   • savingsPercent is computed in code (asking vs market midpoint)
 //   • the rating label is derived from the score, so they can't contradict
 //   • all numerics are coerced/clamped; an inverted market range is corrected
-function finalizeVerdict(v, listing) {
+export function finalizeVerdict(v, listing) {
   const num = (x) => {
     const n = Number(x);
     return Number.isFinite(n) ? n : null;

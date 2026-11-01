@@ -108,7 +108,7 @@ store-assets/                    Web Store images and source logo, not shipped
 index.html, privacy-policy.html  GitHub Pages site, served from the repo root
 ```
 
-There are no automated tests.
+`npm test` runs the unit tests in `tests/` with Node's built-in test runner. They cover price parsing, the reliability gate, listing normalization, and the response corrections. They don't call the Anthropic API, and nothing tests the scraper against page HTML yet.
 
 ## Data and privacy
 
@@ -129,7 +129,7 @@ Narrowing the match would need the `webNavigation` permission and code that inje
 
 **None of this is built yet.**
 
-- Unit tests, scraper fixtures, and CI
+- Scraper fixture tests and CI
 - Schema validation of model output with one retry, and delimiters around seller-written text
 - Usage data stored with each history entry
 - Red and green flags and negotiation tips in the result
