@@ -1,212 +1,151 @@
 # Architecture
 
-DealScan reads a Facebook Marketplace listing, asks Claude to evaluate it, and shows the result in Chrome's side panel. Two things in that path can be wrong: the page read and the model's answer. The design puts one explicit check on each, and refuses rather than guesses when a check fails.
+Five simple diagrams, one idea each. Every box is plain English, and the table under each diagram says which file does that job. For the full detail, see [ARCHITECTURE-DETAIL.md](ARCHITECTURE-DETAIL.md).
 
-For each file's role see [CODEMAP.md](CODEMAP.md). For why it's built this way see [DECISIONS.md](DECISIONS.md).
-
-## System overview
+## 1. The pieces
 
 ```mermaid
-flowchart TB
-  subgraph tab["Facebook tab"]
-    CS["Content scripts<br/>scraper and its sources,<br/>injector (button), observer (navigation)<br/>share window.__dealscan"]
+flowchart LR
+  FB["Facebook listing page"]
+  subgraph browser["In your browser"]
+    READ["Reads the page"]
+    SHOW["Shows the result"]
+    CALL["Makes the calls"]
   end
+  CLAUDE["Claude"]
+  SERVER["DealScan server (optional)"]
 
-  subgraph ext["Extension"]
-    SP["Side panel<br/>sidepanel.js + panel-state, gate, parser"]
-    SW["Service worker<br/>service-worker.js"]
-    OPT["Options page"]
-    subgraph storage["Extension storage"]
-      LOCAL[("chrome.storage.local<br/>settings, saved history,<br/>usage log, read rejection log")]
-      SESSION[("chrome.storage.session<br/>one-hour result cache,<br/>page button flag")]
-    end
-  end
-
-  subgraph server["DealScan server (optional, localhost only)"]
-    APP["Fastify app"]
-    DB[("SQLite")]
-  end
-  API["api.anthropic.com"]
-  FBCDN["fbcdn.net<br/>listing photos"]
-
-  CS -- "OPEN_SIDE_PANEL" --> SW
-  CS -- "LISTING_CHANGED" --> SP
-  SP -- "SCRAPE_LISTING" --> CS
-  SP -- "EVALUATE_LISTING" --> SW
-  SW -- "server mode" --> APP
-  SW -- "direct mode" --> API
-  SW -- "photos" --> FBCDN
-  APP --> API
-  APP --> DB
-  OPT --> LOCAL
-  SP --> storage
-  SW --> storage
+  FB --> READ
+  READ -- "the listing" --> SHOW
+  SHOW -- "evaluate this" --> CALL
+  CALL -- "default" --> CLAUDE
+  CALL -- "server mode" --> SERVER
+  SERVER --> CLAUDE
 ```
 
-The content scripts only read the page and never make network calls. The side panel asks them for a read, decides whether it can be trusted, and then hands the listing to the service worker, which is the only part that makes network requests. It downloads photos, then calls Anthropic directly with the user's key (direct mode, the default) or a DealScan server running on the same machine (server mode). If a tab has no content scripts yet, for example because it was open before the extension loaded, the panel injects them with `chrome.scripting`.
+| Box | File |
+|---|---|
+| Reads the page | `src/content/` (the scraper and its sources) |
+| Shows the result | `src/sidepanel/sidepanel.js` |
+| Makes the calls | `src/background/service-worker.js` |
+| Claude | `src/shared/anthropic.js` sends the request |
+| DealScan server | `server/` |
 
-## One evaluation, from click to result
+Three parts of the extension each have one job. One reads the Facebook page, one decides what to trust and shows it, and one makes every network call. Keeping the calls in one place means the API key never enters Facebook's page. The server is optional: by default the extension calls Claude directly with your own key.
 
-```mermaid
-sequenceDiagram
-  actor User
-  participant Page as Content scripts
-  participant SW as Service worker
-  participant Panel as Side panel
-  participant CDN as fbcdn.net
-  participant API as Anthropic API
-
-  User->>Page: Click "Evaluate Deal"
-  Page->>SW: OPEN_SIDE_PANEL
-  SW->>SW: Set pendingEvaluate in session storage, open the panel
-  Note over Panel: Reads the flag on load, or through<br/>storage.onChanged if already open
-  Panel->>Panel: evaluateIfRequested(): flag is for this tab
-
-  loop Up to 6 reads, 450 ms apart, stopping at the first that passes the gate
-    Panel->>Page: SCRAPE_LISTING
-    Page-->>Panel: Raw read: fields, verified item ID, method
-  end
-  Panel->>Panel: parseListing() runs the gate, checkRead()
-
-  alt Refusal point 1: the gate refuses the read
-    Panel->>Panel: Log reason, method, and item ID locally<br/>State "rejected". No API call
-  else The read is verified
-    Panel->>SW: EVALUATE_LISTING
-    alt Result for this URL from the last hour, unless it had no photos and this read offers more
-      SW-->>Panel: Cached result, no API call
-    else
-      SW->>CDN: Download up to 3 photos
-      CDN-->>SW: Photos (failures are skipped)
-      loop At most 2 attempts
-        SW->>API: Messages request, seller text inside untrusted_listing tags
-        API-->>SW: Answer
-        SW->>SW: readVerdict() validates it
-      end
-      alt Refusal point 2: invalid twice, or Claude declined
-        SW-->>Panel: Rejected, with the reason
-        Panel->>Panel: State "rejected". The attempts were billed
-      else Valid
-        SW->>SW: finalizeVerdict(): label, recommendation,<br/>savings, offer cap computed in code
-        SW->>SW: Log usage, cache the result
-        SW-->>Panel: Result
-        Panel->>Panel: Shown only if the user hasn't moved on (run number)
-      end
-    end
-  end
-```
-
-There are two refusal points. The gate (`src/shared/gate.js`) refuses a read unless a source tied to the URL's item ID supplied the title and price. Validation (`src/shared/verdict.js`) refuses an answer that fails the schema or contradicts the price, after one retry. Every evaluation that reached the API gets one record in the local usage log, with the tokens and cost of all its attempts, whether it ended valid, rejected, or failed. In server mode the service worker sends the listing and photos to `POST /v1/evaluate` instead, and the server runs the same `runEvaluation()` from `src/shared/anthropic.js`. Opening the panel from the toolbar icon, or moving to another listing, only previews: it reads and shows **Evaluate This Listing**, and nothing is sent until a click.
-
-## The side panel state machine
-
-```mermaid
-stateDiagram-v2
-  [*] --> not_marketplace
-  not_marketplace --> reading: navigated to a listing
-  reading --> ready: read-finished, gate passed
-  reading --> rejected: read-finished, gate refused or item changed
-  reading --> error: read-failed
-  ready --> reading: read-started (Evaluate re-reads first)
-  ready --> evaluating: evaluate-started
-  evaluating --> result: evaluated
-  evaluating --> rejected: answer-rejected
-  evaluating --> error: evaluation-failed
-  rejected --> reading: read-started (Try Again reloads the tab)
-  error --> reading: read-started (Try Again evaluates again)
-
-  note right of reading
-    From any state, navigating to a different listing
-    or starting a read moves here and starts a new run.
-    Navigating off Marketplace goes to not_marketplace.
-  end note
-```
-
-`src/shared/panel-state.js` is a pure reducer, and the panel draws only what it says. Every read and evaluation belongs to a run number. Navigation and new reads start a new run, and any event that finishes an older run is ignored, so a slow answer for listing A can't appear on listing B. `rejected` means DealScan chose not to trust something, and `error` means something failed: they show different messages.
-
-## Server request path
+## 2. One evaluation
 
 ```mermaid
 flowchart TD
-  REQ["POST /v1/evaluate"] --> AUTH{"Valid, unrevoked Bearer token?<br/>onRequest hook"}
-  AUTH -- no --> E401["401 unauthorized"]
-  AUTH -- yes --> RL{"Within this token's rate limit?<br/>preParsing hook"}
-  RL -- no --> E429["429 rate_limited"]
-  RL -- yes --> SCHEMA{"Body matches the schema?<br/>no unknown fields, no type coercion"}
-  SCHEMA -- no --> E400["400 invalid_request<br/>or 413 too_large"]
-  SCHEMA -- yes --> HASH["contentHash(listing, photos)<br/>store the listing row"]
-  HASH --> CACHE{"Valid answer for the same item ID, hash,<br/>model, and prompt version within the TTL?"}
-  CACHE -- yes --> HIT["Record a cache hit, cost 0<br/>200 valid"]
-  CACHE -- no --> BUDGET{"Spent today, UTC, below DAILY_BUDGET_USD?"}
-  BUDGET -- no --> EB["Record an error<br/>429 budget_exceeded"]
-  BUDGET -- yes --> RUN["runEvaluation(): Anthropic call,<br/>validation, one retry"]
-  RUN -- valid --> OK["Record valid<br/>200 valid"]
-  RUN -- "invalid twice, or declined" --> REJ["Record rejected<br/>422 invalid_model_output"]
-  RUN -- "API or network failure" --> UP["Record an error<br/>502 upstream_error"]
+  CLICK["You click Evaluate"] --> READ["Read the listing"]
+  READ --> GATE{"Is it this listing?"}
+  GATE -- "yes" --> ASK["Ask Claude"]
+  GATE -- "no: nothing is sent" --> REFUSE["Refuse and say why"]
+  ASK --> CHECK{"Is the answer sound?"}
+  CHECK -- "yes" --> FINISH["Code fills in the rest"]
+  CHECK -- "no" --> REFUSE
+  FINISH --> SHOW["Show the result"]
 ```
 
-Auth runs before the body is parsed, and the rate limit runs after auth, so a bad token can't use up a real token's limit. The cache is checked before the budget because a hit costs nothing. Every outcome after the schema check writes a row to `evaluations`, including cache hits, budget refusals, and failures, with whatever the attempts cost. That table is what `GET /v1/stats` aggregates. The budget is checked before each call, not reserved, so requests already in flight can take spending past the cap. `/healthz` and the stats page's static files (`/stats`, `/stats.js`, `/stats.css`) need no token.
+| Box | File |
+|---|---|
+| Read the listing | `src/content/scraper.js`, asked by `src/sidepanel/sidepanel.js` |
+| Is it this listing? | `src/shared/gate.js` |
+| Ask Claude | `src/background/service-worker.js`, `src/shared/anthropic.js`, `src/shared/prompt.js` |
+| Is the answer sound? | `src/shared/verdict.js` (validation), with the retry in `src/shared/anthropic.js` |
+| Code fills in the rest | `src/shared/verdict.js` (`finalizeVerdict`) |
+| Show the result | `src/sidepanel/sidepanel.js` |
+| Refuse and say why | the panel's refused state, in `src/shared/panel-state.js` |
 
-## Database schema
+DealScan refuses instead of guessing at two points:
+- **Before anything is sent.** The title and price must be tied to the listing's ID number in the page address.
+- **After Claude answers.** An answer that's out of range or contradicts the price gets one retry. If the retry fails too, or Claude declines to answer, DealScan refuses.
+
+Code, not Claude, sets the verdict label, the recommendation, the percent versus the market, and the offer cap.
+
+## 3. What the side panel shows
+
+```mermaid
+stateDiagram-v2
+  state "Reading" as reading
+  state "Ready" as ready
+  state "Evaluating" as evaluating
+  state "Result" as result
+  state "Refused" as rejected
+  state "Error" as error
+
+  [*] --> reading: open a listing
+  reading --> ready: listing verified
+  reading --> rejected: can't verify listing
+  reading --> error: couldn't reach page
+  ready --> evaluating: click Evaluate (re-reads first)
+  evaluating --> result: answer passes checks
+  evaluating --> rejected: answer fails checks
+  evaluating --> error: API or network failure
+  rejected --> reading: Try Again
+  error --> reading: Try Again
+```
+
+| State | Name in `src/shared/panel-state.js` |
+|---|---|
+| Reading | `reading` |
+| Ready | `ready` |
+| Evaluating | `evaluating` |
+| Result | `result` |
+| Refused | `rejected` |
+| Error | `error` |
+
+The panel is always in exactly one of these states, so it never shows a half-finished answer. "Refused" means DealScan chose not to trust something, and "Error" means something broke. Moving to another listing at any point goes back to Reading, and a late answer for the old listing is thrown away. There's one more state, for pages that aren't a listing, which just asks you to open one.
+
+## 4. The server
+
+```mermaid
+flowchart LR
+  TOKEN["Check the token"] --> RATE["Check the rate limit"]
+  RATE --> FORMAT["Check the request"]
+  FORMAT --> CACHE{"Answered this recently?"}
+  CACHE -- "no" --> BUDGET["Check today's budget"]
+  CACHE -- "yes: free" --> SAVE["Record the outcome"]
+  BUDGET --> ASK["Ask Claude, check answer"]
+  ASK --> SAVE
+```
+
+| Box | File |
+|---|---|
+| Check the token | `server/src/app.js`, `server/src/tokens.js` |
+| Check the rate limit | `server/src/app.js` |
+| Check the request | `server/src/routes/evaluate.js` (the body schema) |
+| Answered this recently? | `server/src/routes/evaluate.js`, `server/src/store.js`, `src/shared/cache-key.js` |
+| Check today's budget | `server/src/store.js` |
+| Ask Claude, check answer | `src/shared/anthropic.js`, `src/shared/verdict.js` |
+| Record the outcome | `server/src/store.js`, into SQLite |
+
+Any check can stop the request with a clear error. The cache is checked before the budget because a cached answer costs nothing, so it still works after the day's budget is spent. Once a request passes the first three checks, its outcome is always recorded, whether it was a cache hit, a budget refusal, a refused answer, or a failure.
+
+## 5. What the server records
 
 ```mermaid
 erDiagram
-  tokens ||--o{ evaluations : "token_id, foreign key"
-  listings ||--o{ evaluations : "item_id + content_hash, not enforced"
-  labels |o--o{ listings : "item_id, not enforced"
-
-  tokens {
-    INTEGER id PK
-    TEXT name
-    TEXT token_hash UK "SHA-256 of the token"
-    INTEGER created_at
-    INTEGER revoked_at "null while active"
-  }
-  listings {
-    TEXT item_id PK
-    TEXT content_hash PK
-    TEXT title
-    REAL price
-    TEXT condition
-    TEXT category
-    TEXT description
-    INTEGER first_seen_at
-  }
   evaluations {
-    INTEGER id PK
-    INTEGER token_id FK
-    TEXT item_id
-    TEXT content_hash
-    TEXT model
-    TEXT prompt_version
+    TEXT item_id "which listing"
+    TEXT model "which Claude model"
+    TEXT prompt_version "which prompt"
     TEXT status "valid, rejected, or error"
-    TEXT rejection_reason
-    INTEGER score
-    TEXT verdict
-    REAL price_low
-    REAL price_high
-    REAL suggested_offer
-    TEXT raw_response "finalized verdict as JSON"
-    INTEGER input_tokens
-    INTEGER output_tokens
-    INTEGER attempts
-    REAL cost_usd "null for a budget refusal, when nothing was called"
-    INTEGER latency_ms
-    INTEGER cache_hit
-    INTEGER created_at
-  }
-  labels {
-    TEXT item_id PK
-    TEXT title
-    REAL human_price_low
-    REAL human_price_high
-    INTEGER readable
-    TEXT notes
-    INTEGER labeled_at
-  }
-  schema_migrations {
-    TEXT name PK
-    INTEGER applied_at
+    TEXT rejection_reason "why it was refused"
+    INTEGER score "0 to 100"
+    REAL cost_usd "what it cost"
+    INTEGER latency_ms "how long it took"
+    INTEGER cache_hit "answered from cache?"
+    INTEGER created_at "when"
   }
 ```
 
-The tables are created by the numbered files in `server/migrations/`, applied in order on startup and recorded in `schema_migrations`. There is no column for seller names, profile links, page HTML, or photos. Only `evaluations.token_id` is a declared foreign key. The other links are joins the code makes: the cache looks up `evaluations` by item ID and content hash, and the eval harness joins `labels` to the newest `listings` row for each item ID. Despite its name, `raw_response` holds the finalized verdict that was returned, not the model's raw text. The cache serves its answers from that column.
+| Table | File |
+|---|---|
+| `evaluations` | created by `server/migrations/001_initial.sql`, written by `server/src/store.js` |
+
+Every recorded request is one row, whatever happened to it. That's what makes cost and rejection rates measurable instead of guessed. Other tables hold the listings' text, hashed tokens, and human labels for the evaluation harness. There's no column for seller names or photos.
+
+## More detail
+
+[ARCHITECTURE-DETAIL.md](ARCHITECTURE-DETAIL.md) has the full versions: every message between the parts, the read retries and cache rules, every panel event, the server's error codes, and all five tables.

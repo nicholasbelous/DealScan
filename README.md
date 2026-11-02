@@ -77,7 +77,7 @@ The server's endpoints:
 - `GET /healthz`
 - `GET /stats`, a page showing the stats
 
-Everything except `/healthz` and the stats page's files needs `Authorization: Bearer <token>`. The request path and the database are diagrammed in [ARCHITECTURE.md](docs/ARCHITECTURE.md#server-request-path). Cache lifetime and the rate limit are configured in `server/.env`.
+Everything except `/healthz` and the stats page's files needs `Authorization: Bearer <token>`. The request path and what the server records are diagrammed in [ARCHITECTURE.md](docs/ARCHITECTURE.md#4-the-server). Cache lifetime and the rate limit are configured in `server/.env`.
 
 ## Development
 
