@@ -143,4 +143,14 @@ It imports the prompt, validation, and pricing from `src/shared/`, so the two mo
 
 **Rejected.** Search on by default.
 
-**Tradeoff.** Without search, the range is Claude's estimate and can be out of date or wrong. With search on, no JSON schema is sent, because search results carry citations and the API documents citations as incompatible with a JSON output format, so code validation does all the work.
+**Tradeoff.** Without search, the range is Claude's estimate and can be out of date or wrong.
+
+## 13. Content scripts load on all of facebook.com
+
+**Context.** Chrome injects declared content scripts only on a full page load, and Facebook moves between pages without one. With a `/marketplace/*` match, a tab first loaded on the Facebook home page would get no scripts when the user moved to a listing inside Facebook. There would be no button and no navigation updates until a reload. This was checked with a small test extension and a local page in Chrome, not on live Facebook. After `/` to `/marketplace/` to `/marketplace/item/1/` using `history.pushState`, the script hadn't run until the page was reloaded. A tab first loaded on `/marketplace/` kept its script when moving to an item.
+
+**Decision.** `manifest.json` matches `https://*.facebook.com/*`. Outside listing pages the scripts only watch the address: the button appears only on item pages, and the panel reads only item pages.
+
+**Rejected.** Narrowing the match, which would need the `webNavigation` permission and code that injects the scripts on navigation.
+
+**Tradeoff.** The scripts load on every Facebook page, which the privacy policy has to explain. With search on, no JSON schema is sent, because search results carry citations and the API documents citations as incompatible with a JSON output format, so code validation does all the work.

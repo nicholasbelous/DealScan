@@ -1,7 +1,7 @@
 # DealScan: Project Context for Claude
 
 ## What This Is
-A Chrome extension (Manifest V3) that evaluates Facebook Marketplace listings with the Anthropic API. A small backend that holds the API key, caches results, and records every evaluation is planned (see Roadmap). This file describes the target design; README.md describes what is built today.
+A Chrome extension (Manifest V3) that evaluates Facebook Marketplace listings with the Anthropic API. An optional small backend (server mode) holds the API key, caches results, and records every evaluation. This file describes the target design; README.md and docs/ describe what is built today.
 
 The extension reads the Marketplace listing currently on screen and, on user click, gets an evaluation from Claude and shows a deal score, verdict, price breakdown, and suggested offer in a side panel. Red/green flags and negotiation tips are planned.
 
@@ -135,15 +135,17 @@ Done so far: 1, 3, 4, 5, 6, and 7, except where noted. Milestone 2 still needs f
 
 ## File Layout (target)
 ```
-src/background/   service-worker.js (message router, network calls, local cache)
+src/background/   service-worker.js (network calls, photo downloads, result cache)
 src/content/      scraper.js + its sources and field extraction, injector.js (floating button), observer.js (SPA nav)
-src/sidepanel/    primary UI and state machine (Evaluate / History tabs)
+src/sidepanel/    primary UI (Evaluate / History tabs), driven by src/shared/panel-state.js
 src/options/      mode, key or token, history export
-src/shared/       pure logic shared with the server: gate, parser, prompt, verdict validation and finalizeVerdict, pricing, stats, cacheKey
-server/           Fastify app, routes, db, migrations, stats page
-tests/            unit, scraper fixture, adversarial, and server tests
+src/shared/       pure logic shared with the server: gate, parser, panel state, prompt, verdict validation and finalizeVerdict, pricing, stats, cacheKey
+server/           Fastify app, routes, db, migrations, stats page, server tests
+tests/            unit, browser (scraper, panel, sanitizer), and adversarial tests
 tests/fixtures/   sanitized listing HTML
 eval/             harness script and results
+scripts/          fixture sanitizer and headless Chrome helpers for tests
+docs/             architecture, decisions, code map, testing
 ```
 
 ## Distribution
