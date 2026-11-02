@@ -60,6 +60,21 @@ export function noPhotosNotice(verdict, verifiedBy) {
   return "Evaluated without photos."; // a cached result from before imagesOffered was recorded
 }
 
+/**
+ * Where the asking price sits against the market range, for the "vs market"
+ * cell. Inside the range there's no meaningful percentage, so it says so.
+ * Outside it, the percent is savingsPercent: asking vs the range's midpoint.
+ * @returns {{text: string, tone: "below"|"above"|"within"} | null}
+ */
+export function marketPosition(verdict) {
+  const { askingPrice, marketLow, marketHigh, savingsPercent } = verdict;
+  if (![askingPrice, marketLow, marketHigh].every(Number.isFinite) || marketHigh <= 0) return null;
+  if (askingPrice >= marketLow && askingPrice <= marketHigh) return { text: "Within market range", tone: "within" };
+  if (!Number.isFinite(savingsPercent)) return null;
+  const tone = askingPrice < marketLow ? "below" : "above";
+  return { text: `${Math.abs(Math.round(savingsPercent))}% ${tone}`, tone };
+}
+
 /** Truncate long text with an ellipsis for table cells / cards. */
 export function truncate(text, max = 60) {
   if (!text) return "";

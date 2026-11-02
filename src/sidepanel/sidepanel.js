@@ -18,6 +18,7 @@ import {
   formatCost,
   formatMoney,
   formatRelative,
+  marketPosition,
   noPhotosNotice,
   scoreColor,
   truncate,
@@ -411,17 +412,12 @@ function renderVerdict(listing, v) {
       : "—";
   $("p-offer").textContent = isFree ? "Free" : formatMoney(v.suggestedOffer, cur);
 
-  const savings = Number(v.savingsPercent);
-  const savingsEl = $("p-savings");
-  if (Number.isFinite(savings)) {
-    const below = savings >= 0;
-    savingsEl.textContent = `${Math.abs(Math.round(savings))}% ${below ? "below" : "above"}`;
-    savingsEl.style.color = below ? "var(--great)" : "var(--avoid)";
-  } else {
-    savingsEl.textContent = "—";
-    savingsEl.style.color = "";
-  }
+  const position = marketPosition(v);
+  $("p-savings").textContent = position?.text ?? "—";
+  $("p-savings").style.color = MARKET_POSITION_COLORS[position?.tone] ?? "";
 }
+
+const MARKET_POSITION_COLORS = { below: "var(--great)", above: "var(--avoid)" };
 
 // ---------- History tab ---------------------------------------------------------------
 
