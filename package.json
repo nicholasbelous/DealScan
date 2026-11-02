@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test",
     "eval": "node eval/run.js",
-    "eval:import": "node eval/import-labels.js"
+    "eval:import": "node eval/import-labels.js",
+    "fixture:sanitize": "node scripts/sanitize-fixture.js"
   },
   "workspaces": [
     "server"

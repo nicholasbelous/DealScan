@@ -5,10 +5,10 @@
 
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import http from "node:http";
 
 import { IN_CI, findChrome, launchChrome } from "../scripts/lib/chrome.js";
+import { runScraper } from "../scripts/lib/run-scraper.js";
 import { parseListing } from "../src/shared/parser.js";
 
 const ITEM = "1110001";
@@ -17,13 +17,6 @@ const SELLER = "9990009";
 const TITLE = "Fake Road Bike";
 
 const CHROME = findChrome();
-
-// The real content scripts, in manifest order, minus the two with side effects.
-const manifest = JSON.parse(fs.readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
-const scraperSource = manifest.content_scripts[0].js
-  .filter((file) => !/injector|observer/.test(file))
-  .map((file) => fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8"))
-  .join("\n");
 
 const sellerLink = (id) => `<a href="/marketplace/profile/${SELLER}/?product_id=${id}">Seller</a>`;
 const feedCard = (id, title, price, extra = "") =>
@@ -43,17 +36,7 @@ let server, chrome, tab, port;
 async function scrape(html) {
   pages[ITEM] = html;
   await tab.navigate(`http://localhost:${port}/marketplace/item/${ITEM}/?ref=x`);
-  const out = await tab.evaluate(`(() => {
-    let handler;
-    window.chrome = { runtime: { onMessage: { addListener: (h) => (handler = h) } } };
-    console.debug = () => {};
-    ${scraperSource}
-    let out;
-    handler({ type: "SCRAPE_LISTING" }, null, (r) => (out = r));
-    return out;
-  })()`);
-  assert.equal(out?.ok, true, JSON.stringify(out));
-  return out.data;
+  return runScraper(tab);
 }
 
 before(async () => {
@@ -165,6 +148,13 @@ test("accepts a Free price in the panel", opts, async () => {
   const listing = parseListing(await scrape(page(panel(sellerLink(ITEM), TITLE, "Free"))));
   assert.equal(listing.reliable, true, listing.rejectReason);
   assert.equal(listing.price, 0);
+});
+
+test("the location stops at its own element, not the text after it", opts, async () => {
+  const links = `<div>Listed 2 days ago in Faketown, WA</div><div><span>Condition</span> <span>Used</span></div>${sellerLink(ITEM)}`;
+  const listing = parseListing(await scrape(page(panel(links))));
+  assert.equal(listing.location, "Faketown, WA");
+  assert.equal(listing.condition, "Used");
 });
 
 test("never exposes the seller's profile ID or link", opts, async () => {

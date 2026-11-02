@@ -15,6 +15,11 @@ build/
 # these large source files are not.
 store-assets/screenshots/raw/
 
+# Saved Facebook pages. Raw HTML holds session data and real people's details,
+# and must never be committed. Sanitized output waits in review until it's read.
+tests/fixtures/raw/
+tests/fixtures/review/
+
 # Server database
 server/data/
 

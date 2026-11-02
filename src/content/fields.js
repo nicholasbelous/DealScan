@@ -23,9 +23,17 @@
     return null;
   }
 
+  // Reads one small element, not the whole container: a container's text runs into
+  // whatever follows the location, which would then be sent as part of it.
   function locationFromDom(scope = document.body) {
-    const m = scope.textContent.match(/Listed[^·\n]*?\bin\s+([A-Z][\w\s.,'-]{2,40})/);
-    return m ? m[1].trim() : null;
+    for (const el of scope.querySelectorAll("span, div")) {
+      if (el.childElementCount > 1) continue;
+      const text = el.textContent?.replace(/\s+/g, " ").trim() ?? "";
+      if (text.length > 100) continue;
+      const m = text.match(/Listed[^·\n]*?\bin\s+([A-Z][\w\s.,'-]{2,40})/);
+      if (m) return m[1].trim();
+    }
+    return null;
   }
 
   function longestDetailText(

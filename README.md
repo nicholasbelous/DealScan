@@ -178,13 +178,14 @@ src/
   shared/formatter.js            display helpers
 server/                          optional backend: Fastify, SQLite, migrations
 eval/                            evaluation harness and labels template
+scripts/                         fixture sanitizer and test helpers
 assets/icons/                    extension icons
 store-assets/                    Web Store images and source logo, not shipped
 index.html, privacy-policy.html  GitHub Pages site, served from the repo root
 privacy-policy-next.html         policy for this code, replaces privacy-policy.html at release
 ```
 
-`npm test` runs the tests in `tests/` and `server/tests/` with Node's built-in test runner, after `npm install` for the server's dependencies. They cover price parsing, the reliability gate, listing normalization, and model output validation, with the API mocked. The scraper tests run against fake pages in headless Chrome. Without Chrome they skip on a developer's machine and fail in CI, where GitHub Actions runs `npm test` on every push and pull request. The tests don't call the Anthropic API.
+`npm test` runs the tests in `tests/` and `server/tests/` with Node's built-in test runner, after `npm install` for the server's dependencies. They cover price parsing, the reliability gate, listing normalization, and model output validation, with the API mocked. The scraper tests run against fake pages in headless Chrome, plus any reviewed fixtures in `tests/fixtures/` (see the README there). The panel tests run the real panel page with `chrome.*` stubbed. Without Chrome they skip on a developer's machine and fail in CI, where GitHub Actions runs `npm test` on every push and pull request. The tests don't call the Anthropic API.
 
 ## Data and privacy
 
@@ -205,7 +206,7 @@ Narrowing the match would need the `webNavigation` permission and code that inje
 
 **None of this is built yet.**
 
-- Scraper tests against saved, sanitized listing pages
+- Capturing saved, sanitized listing pages as fixtures. The sanitizer exists, and no fixtures have been captured yet
 - Photos from the verified listing panel
 - Red and green flags and negotiation tips in the result
 - Feeding the read rejection log into the eval harness, so rejection precision covers gate rejections
