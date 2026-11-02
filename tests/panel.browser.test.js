@@ -38,19 +38,37 @@ const CHROME_STUB = `
     },
   };
   const t = window.__t;
-  const store = {};
-  const area = {
-    get: (key, cb) => {
-      const out = { [key]: store[key] };
-      return cb ? cb(out) : Promise.resolve(out);
-    },
-    set: (obj, cb) => {
-      Object.assign(store, obj);
-      if (obj.history) t.saved = obj.history;
-      return cb ? cb() : Promise.resolve();
-    },
-    remove: () => Promise.resolve(),
-  };
+  function storageArea() {
+    const store = {};
+    const listeners = [];
+    const changed = (changes) => setTimeout(() => listeners.forEach((l) => l(changes)));
+    return {
+      get: (key, cb) => {
+        const out = { [key]: store[key] };
+        return cb ? cb(out) : Promise.resolve(out);
+      },
+      set: (obj, cb) => {
+        const changes = {};
+        for (const [key, value] of Object.entries(obj)) changes[key] = { oldValue: store[key], newValue: value };
+        Object.assign(store, obj);
+        if (obj.history) t.saved = obj.history;
+        changed(changes);
+        return cb ? cb() : Promise.resolve();
+      },
+      remove: (key) => {
+        const changes = { [key]: { oldValue: store[key] } };
+        delete store[key];
+        changed(changes);
+        return Promise.resolve();
+      },
+      onChanged: { addListener: (l) => listeners.push(l) },
+    };
+  }
+  const local = storageArea();
+  const session = storageArea();
+  // What the service worker does when the page's Evaluate Deal button is clicked.
+  t.clickPageButton = (tabId = 1) => session.set({ pendingEvaluate: { tabId, at: Date.now() } });
+  if (location.search.includes("clicked")) t.clickPageButton(); // clicked while the panel was closed
   window.chrome = {
     runtime: {
       lastError: undefined,
@@ -61,7 +79,7 @@ const CHROME_STUB = `
           t.evaluations.push({ title: message.payload.title, images: message.payload.images, resolve })
         ),
     },
-    storage: { local: area, session: area },
+    storage: { local, session },
     tabs: {
       query: async () => [{ id: 1, url: t.url }],
       sendMessage: (_id, _msg, cb) => cb({ ok: true, data: t.read(t.url) }),
@@ -244,6 +262,84 @@ test("a double click on evaluate sends one request", opts, async () => {
   await waitFor(async () => (await pendingCount()) >= 1, "the evaluation request");
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(await pendingCount(), 1);
+});
+
+// --- The page's Evaluate Deal button -------------------------------------------
+
+const clickPageButton = (times = 1, tabId = 1) =>
+  page.evaluate(`for (let i = 0; i < ${times}; i++) window.__t.clickPageButton(${tabId})`);
+const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
+const openPanelFromPageButton = () =>
+  page.navigate(`http://localhost:${server.address().port}/src/sidepanel/sidepanel.html?clicked`);
+
+test("page button, panel closed: the panel evaluates once it has loaded", opts, async () => {
+  await openPanelFromPageButton();
+  await waitFor(async () => (await pendingCount()) === 1, "the evaluation request");
+  assert.equal(await visibleState(), "state-evaluating");
+  await settle();
+  assert.equal(await pendingCount(), 1);
+});
+
+test("page button, panel already open: starts the evaluation, even from the History tab", opts, async () => {
+  await waitForState("ready");
+  await click("tab-history");
+  await clickPageButton();
+  await waitFor(async () => (await pendingCount()) === 1, "the evaluation request");
+  assert.equal(await visibleState(), "state-evaluating");
+  assert.equal(await page.evaluate(`document.getElementById("view-evaluate").hidden`), false);
+});
+
+test("page button, double click with the panel open: one request", opts, async () => {
+  await waitForState("ready");
+  await clickPageButton(2);
+  await waitFor(async () => (await pendingCount()) >= 1, "the evaluation request");
+  await settle();
+  assert.equal(await pendingCount(), 1);
+});
+
+test("page button, double click while the panel opens: one request", opts, async () => {
+  await openPanelFromPageButton();
+  await clickPageButton();
+  await waitFor(async () => (await pendingCount()) >= 1, "the evaluation request");
+  await settle();
+  assert.equal(await pendingCount(), 1);
+});
+
+test("page button while this listing is already evaluating: no second request", opts, async () => {
+  await startEvaluatingA();
+  await clickPageButton();
+  await settle();
+  assert.equal(await pendingCount(), 1);
+  assert.equal(await visibleState(), "state-evaluating");
+});
+
+test("page button with this listing's result on screen: shows it, no new request", opts, async () => {
+  await startEvaluatingA();
+  await release(0, verdictFor("Verdict for A"));
+  await waitForState("result");
+  await clickPageButton();
+  await settle();
+  assert.equal(await pendingCount(), 1);
+  assert.equal(await visibleState(), "state-result");
+  assert.equal(await text("v-summary"), "Verdict for A");
+});
+
+test("page button, then moving to another listing: A's late answer never shows on B", opts, async () => {
+  await waitForState("ready");
+  await clickPageButton();
+  await waitFor(async () => (await pendingCount()) === 1, "the evaluation request");
+  await navigateTo(URL_B);
+  await release(0, verdictFor("Verdict for A"));
+  await waitForState("ready");
+  assert.equal(await text("ready-title"), "Fake Sofa B");
+});
+
+test("a button click from another tab doesn't evaluate this one", opts, async () => {
+  await waitForState("ready");
+  await clickPageButton(1, 2);
+  await settle();
+  assert.equal(await pendingCount(), 0);
+  assert.equal(await visibleState(), "state-ready");
 });
 
 test("a page-data read with photos hands them to the service worker", opts, async () => {

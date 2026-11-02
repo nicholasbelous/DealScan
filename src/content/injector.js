@@ -1,7 +1,8 @@
 // DealScan injector — adds the floating "Evaluate Deal" button to listing pages.
 //
-// Clicking the button asks the service worker to open the side panel; the
-// panel then scrapes this tab and starts the evaluation automatically.
+// Clicking the button asks the service worker to open the side panel, or use
+// the one already open; the panel then scrapes this tab and starts the
+// evaluation automatically.
 // Classic script (no ES modules in content scripts).
 
 (() => {

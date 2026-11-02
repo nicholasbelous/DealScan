@@ -36,10 +36,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message?.type) {
     case "OPEN_SIDE_PANEL":
       // From the floating "Evaluate Deal" button. Must call open() synchronously
-      // off the user gesture. We also flag that THIS tab was opened with intent
-      // to evaluate, so the panel auto-evaluates on load — whereas opening the
-      // panel via the toolbar icon or in-app navigation only previews (never
-      // spends money on a listing the user is just browsing past).
+      // off the user gesture. We also flag that THIS tab asked to evaluate: a
+      // panel that is opening reads the flag on load, and one already open sees
+      // it change. Opening the panel via the toolbar icon or in-app navigation
+      // only previews (never spends money on a listing the user is browsing past).
       if (sender.tab?.windowId != null) {
         chrome.storage.session.set({
           pendingEvaluate: { tabId: sender.tab.id, at: Date.now() },

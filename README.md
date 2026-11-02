@@ -7,7 +7,7 @@ DealScan is a Chrome extension for Facebook Marketplace. On a listing page, it r
 ## How it works
 
 1. On a `facebook.com/marketplace/item/*` page, the extension adds a floating **Evaluate Deal** button.
-2. Clicking it opens the side panel, which starts the evaluation. Opening the panel from the toolbar icon, or moving to another listing with the panel open, only shows the listing title and an **Evaluate This Listing** button. No API call is made until you click.
+2. Clicking it opens the side panel, or uses the one already open, and starts the evaluation. If the panel is already showing a result for this listing, it shows that instead of paying again. Opening the panel from the toolbar icon, or moving to another listing with the panel open, only shows the listing title and an **Evaluate This Listing** button. No API call is made until you click.
 3. The panel asks the scraper for the listing, retrying briefly because Facebook loads listing data after navigation. The scraper uses three sources, in priority order:
    - Embedded page JSON, used only if the object's `id` matches the item ID in the URL.
    - The listing panel: the smallest container around a link with a `product_id` parameter that also holds a title and price, and no links to other listings. Used only if that `product_id` matches the item ID in the URL. Only that parameter is read from the link.

@@ -58,24 +58,35 @@ document.addEventListener("DOMContentLoaded", () => {
   routeInitialState();
 });
 
-// On open: auto-evaluate ONLY if the panel was opened by the page's "Evaluate
-// Deal" button (which sets a one-shot flag). Opening via the toolbar icon just
-// previews — never auto-spends.
+// On open: auto-evaluate ONLY if the page's "Evaluate Deal" button asked for it.
+// Opening via the toolbar icon just previews — never auto-spends.
 async function routeInitialState() {
-  const pending = await consumePendingEvaluate();
-  const tab = await getListingTab();
-  if (pending && tab && pending.tabId === tab.id) {
-    evaluateActiveTab();
-  } else {
-    previewActiveTab();
-  }
+  if (!(await evaluateIfRequested())) previewActiveTab();
 }
 
-async function consumePendingEvaluate() {
-  const { pendingEvaluate } = await chrome.storage.session.get("pendingEvaluate");
-  if (pendingEvaluate) chrome.storage.session.remove("pendingEvaluate");
-  if (!pendingEvaluate || Date.now() - pendingEvaluate.at > 10000) return null;
-  return pendingEvaluate;
+// The page's button sets a one-shot flag in session storage. A panel that is
+// already open sees it change; a panel that is just opening reads it on load.
+// Either way the click is never a silent no-op.
+chrome.storage.session.onChanged.addListener((changes) => {
+  if (changes.pendingEvaluate?.newValue) evaluateIfRequested();
+});
+
+const EVALUATE_REQUEST_MAX_AGE_MS = 10000;
+
+// Consumes the flag if it's for the listing tab in this window, then evaluates
+// through the usual path: the gate, the busy check, and run numbers all apply.
+// A result already on screen for this listing is shown, not paid for again.
+async function evaluateIfRequested() {
+  const tab = await getListingTab();
+  const { pendingEvaluate: request } = await chrome.storage.session.get("pendingEvaluate");
+  if (!request || !tab || request.tabId !== tab.id) return false;
+  await chrome.storage.session.remove("pendingEvaluate");
+  if (Date.now() - request.at > EVALUATE_REQUEST_MAX_AGE_MS) return false;
+
+  activateTab($("tab-evaluate"));
+  const showingThisResult = state.name === "result" && state.itemId === itemIdFromUrl(tab.url);
+  if (!showingThisResult) evaluateActiveTab();
+  return true;
 }
 
 // Moving to another listing clears the old result at once, and any evaluation
