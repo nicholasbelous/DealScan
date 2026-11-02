@@ -76,13 +76,21 @@ test("invalid output: retries once, rejects, and records the billed cost", async
   assert.ok(row.cost_usd > 0);
 });
 
-test("invalid output: rejects a contradictory answer", async () => {
+test("invalid output: rejects a good score on an above-market price", async () => {
   const { post } = setup();
-  const bad = { ...GOOD_ANSWER, score: 95, verdict: "Overpriced" };
+  const bad = { ...GOOD_ANSWER, score: 95, marketLow: 40, marketHigh: 60, suggestedOffer: 50 };
   mockAnthropic(apiReply(bad), apiReply(bad));
   const res = await post({ listing: LISTING });
   assert.equal(res.statusCode, 422);
-  assert.match(res.json().reason, /contradicts/);
+  assert.match(res.json().reason, /above-market/);
+});
+
+test("the stored verdict is the one code derived, not the model's", async () => {
+  const { post, db } = setup();
+  mockAnthropic(apiReply({ ...GOOD_ANSWER, score: 82, verdict: "Great Deal" }));
+  const res = await post({ listing: LISTING });
+  assert.equal(res.json().verdict.verdict, "Good Deal");
+  assert.equal(rows(db)[0].verdict, "Good Deal");
 });
 
 test("upstream failure: a typed error that leaks nothing, with the failure recorded", async () => {

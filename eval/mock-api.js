@@ -15,8 +15,6 @@ export function installMockApi() {
         ? "{not json"
         : JSON.stringify({
             score,
-            verdict: "Fair",
-            recommendation: "Negotiate",
             marketLow: price * 0.8,
             marketHigh: price * 1.2,
             suggestedOffer: price * 0.9,

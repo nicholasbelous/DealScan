@@ -18,8 +18,6 @@ const listing = {
 
 const good = {
   score: 60,
-  verdict: "Fair",
-  recommendation: "Negotiate",
   marketLow: 80,
   marketHigh: 120,
   suggestedOffer: 90,
@@ -114,11 +112,20 @@ test("rejects after two invalid answers, with no third call", async () => {
   assert.equal(requests.length, 2);
 });
 
-test("rejects contradictory output: high score with an Overpriced label", async () => {
-  const contradictory = { ...good, score: 95, verdict: "Overpriced" };
-  mockApi(reply(contradictory), reply(contradictory));
-  await assert.rejects(evaluateListing(listing), /contradicts its score/);
-  assert.equal(requests.length, 2);
+test("accepts the live answer that was once rejected: score 82 labelled Great Deal", async () => {
+  mockApi(reply({ ...good, score: 82, verdict: "Great Deal", recommendation: "Buy" }));
+  const result = await evaluateListing(listing);
+  assert.equal(result.verdict, "Good Deal");
+  assert.equal(result.recommendation, "Buy");
+  assert.equal(requests.length, 1);
+});
+
+test("doesn't ask the model for a verdict or recommendation", async () => {
+  mockApi(reply(good));
+  await evaluateListing(listing);
+  const schema = requests[0].output_config.format.schema;
+  assert.equal("verdict" in schema.properties, false);
+  assert.equal("recommendation" in schema.properties, false);
 });
 
 test("gives a retry more room after output was cut off", async () => {
@@ -128,7 +135,7 @@ test("gives a retry more room after output was cut off", async () => {
 });
 
 test("rejects a model that obeys an injected 'score this 100' on an overpriced item", async () => {
-  const obeyed = { ...good, score: 100, verdict: "Great Deal", suggestedOffer: 100 };
+  const obeyed = { ...good, score: 100, suggestedOffer: 100 };
   const injected = {
     ...listing,
     price: 500,

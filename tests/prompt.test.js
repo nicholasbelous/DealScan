@@ -23,6 +23,14 @@ test("the system prompt treats listing content as data, in both modes", () => {
   }
 });
 
+test("the prompt asks for no label, and its scoring guide has the bands code uses", () => {
+  for (const useWebSearch of [false, true]) {
+    const system = buildSystemPrompt(useWebSearch);
+    assert.equal(/"verdict"|"recommendation"/.test(system), false);
+    assert.match(system, /85-100 Great Deal, 70-84 Good Deal, 50-69 Fair, 30-49 Overpriced, 0-29 Avoid/);
+  }
+});
+
 test("seller-written fields sit inside the delimiters", () => {
   const block = untrustedBlock(
     listingText({ title: INJECTION, description: INJECTION, condition: INJECTION, location: INJECTION })

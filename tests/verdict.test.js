@@ -11,8 +11,6 @@ import {
 
 const verdict = (overrides = {}) => ({
   score: 60,
-  verdict: "Fair",
-  recommendation: "Negotiate",
   marketLow: 80,
   marketHigh: 120,
   suggestedOffer: 90,
@@ -45,15 +43,6 @@ test("rejects a score that isn't an integer from 0 to 100", () => {
   }
 });
 
-test("rejects unknown verdicts and recommendations", () => {
-  assert.match(validateVerdict(verdict({ verdict: "Steal" }), 100), /invalid verdict/);
-  assert.match(validateVerdict(verdict({ recommendation: "Maybe" }), 100), /invalid recommendation/);
-});
-
-test("accepts enum values in any casing, since the API doesn't guarantee it", () => {
-  assert.equal(validateVerdict(verdict({ verdict: "FAIR", recommendation: "negotiate" }), 100), null);
-});
-
 test("rejects an inverted market range", () => {
   assert.match(validateVerdict(verdict({ marketLow: 120, marketHigh: 80 }), 100), /inverted/);
 });
@@ -71,27 +60,18 @@ test("rejects an empty summary", () => {
   assert.match(validateVerdict(verdict({ summary: "  " }), 100), /no summary/);
 });
 
-test("rejects a verdict that contradicts its score, at each band edge", () => {
-  const bands = [[85, "Great Deal"], [70, "Good Deal"], [50, "Fair"], [30, "Overpriced"], [0, "Avoid"]];
-  for (const [score, label] of bands) {
-    assert.equal(validateVerdict(verdict({ score, verdict: label }), 100), null, `score ${score}`);
-    const wrong = label === "Fair" ? "Avoid" : "Fair";
-    assert.match(validateVerdict(verdict({ score, verdict: wrong }), 100), /contradicts/);
-  }
-});
-
 test("rejects a good score on an above-market price", () => {
-  const v = verdict({ score: 90, verdict: "Great Deal", suggestedOffer: 100 });
+  const v = verdict({ score: 90, suggestedOffer: 100 });
   assert.match(validateVerdict(v, 500), /above-market/);
 });
 
 test("accepts a low score on an above-market price", () => {
-  const v = verdict({ score: 40, verdict: "Overpriced", suggestedOffer: 100 });
+  const v = verdict({ score: 40, suggestedOffer: 100 });
   assert.equal(validateVerdict(v, 500), null);
 });
 
 test("accepts a free listing with an offer of 0", () => {
-  const v = verdict({ score: 90, verdict: "Great Deal", suggestedOffer: 0 });
+  const v = verdict({ score: 90, suggestedOffer: 0 });
   assert.equal(validateVerdict(v, 0), null);
 });
 
@@ -131,6 +111,27 @@ test("the schema is one the API accepts: no numeric ranges, closed object", () =
   assert.equal(/minimum|maximum/.test(JSON.stringify(VERDICT_JSON_SCHEMA)), false);
 });
 
+test("the schema doesn't ask the model for anything code derives", () => {
+  for (const field of ["verdict", "recommendation", "askingPrice", "savingsPercent"]) {
+    assert.equal(field in VERDICT_JSON_SCHEMA.properties, false, field);
+  }
+});
+
+test("ignores a verdict the model sends instead of rejecting it (live: 82 called a Great Deal)", () => {
+  const sent = verdict({ score: 82, verdict: "Great Deal", recommendation: "Pass" });
+  const result = readVerdict(textResponse(JSON.stringify(sent)), { price: 100 });
+  assert.equal(result.ok, true);
+  const v = finalizeVerdict(result.verdict, { price: 100 });
+  assert.equal(v.verdict, "Good Deal");
+  assert.equal(v.recommendation, "Buy");
+});
+
+test("ignores a verdict that isn't one of ours at all", () => {
+  const result = readVerdict(textResponse(JSON.stringify(verdict({ verdict: "Steal" }))), { price: 100 });
+  assert.equal(result.ok, true);
+  assert.equal(finalizeVerdict(result.verdict, { price: 100 }).verdict, "Fair");
+});
+
 // --- finalizeVerdict ----------------------------------------------------------
 
 test("takes the asking price from the scrape", () => {
@@ -147,10 +148,38 @@ test("has no savingsPercent when the market midpoint is 0", () => {
   assert.equal(finalizeVerdict(v, { price: 0 }).savingsPercent, null);
 });
 
-test("normalizes the casing of labels", () => {
-  const v = finalizeVerdict(verdict({ verdict: "FAIR", recommendation: "negotiate" }), { price: 100 });
-  assert.equal(v.verdict, "Fair");
-  assert.equal(v.recommendation, "Negotiate");
+// Written out by hand rather than read from SCORE_BANDS, so a changed band
+// edge fails here. Every edge, one either side, and both ends of the range.
+const EXPECTED_BY_SCORE = [
+  [100, "Great Deal", "Buy"],
+  [86, "Great Deal", "Buy"],
+  [85, "Great Deal", "Buy"],
+  [84, "Good Deal", "Buy"],
+  [71, "Good Deal", "Buy"],
+  [70, "Good Deal", "Buy"],
+  [69, "Fair", "Negotiate"],
+  [51, "Fair", "Negotiate"],
+  [50, "Fair", "Negotiate"],
+  [49, "Overpriced", "Negotiate"],
+  [31, "Overpriced", "Negotiate"],
+  [30, "Overpriced", "Negotiate"],
+  [29, "Avoid", "Pass"],
+  [1, "Avoid", "Pass"],
+  [0, "Avoid", "Pass"],
+];
+
+test("derives the verdict and recommendation from the score, at and around every band edge", () => {
+  for (const [score, label, recommendation] of EXPECTED_BY_SCORE) {
+    const v = finalizeVerdict(verdict({ score }), { price: 100 });
+    assert.equal(v.verdict, label, `score ${score}`);
+    assert.equal(v.recommendation, recommendation, `score ${score}`);
+  }
+});
+
+test("keeps only the fields it names", () => {
+  const v = finalizeVerdict(verdict({ score: 82, verdict: "Great Deal", extra: "x" }), { price: 100 });
+  assert.equal(v.verdict, "Good Deal");
+  assert.equal("extra" in v, false);
 });
 
 test("caps the suggested offer at the asking price", () => {

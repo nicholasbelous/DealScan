@@ -20,8 +20,6 @@ export const LISTING = {
 
 export const GOOD_ANSWER = {
   score: 60,
-  verdict: "Fair",
-  recommendation: "Negotiate",
   marketLow: 80,
   marketHigh: 120,
   suggestedOffer: 90,
