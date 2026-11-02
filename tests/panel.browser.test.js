@@ -25,11 +25,12 @@ const CHROME_STUB = `
     url: ${JSON.stringify(URL_A)},
     evaluations: [],
     saved: [],
+    photos: [],
     listeners: { message: [], activated: [], updated: [] },
     read(url) {
       const id = url.match(/item\\/(\\d+)/)?.[1];
       const title = id === "1110001" ? "Fake Bike A" : "Fake Sofa B";
-      return { url, verifiedItemId: id, verifiedBy: "embedded_data", transitioning: false, title, price: "$100", images: [] };
+      return { url, verifiedItemId: id, verifiedBy: "embedded_data", transitioning: false, title, price: "$100", images: this.photos };
     },
     navigate(url) {
       this.url = url;
@@ -56,7 +57,9 @@ const CHROME_STUB = `
       getManifest: () => ({ content_scripts: [{ js: [] }] }),
       onMessage: { addListener: (l) => t.listeners.message.push(l) },
       sendMessage: (message) =>
-        new Promise((resolve) => t.evaluations.push({ title: message.payload.title, resolve })),
+        new Promise((resolve) =>
+          t.evaluations.push({ title: message.payload.title, images: message.payload.images, resolve })
+        ),
     },
     storage: { local: area, session: area },
     tabs: {
@@ -241,6 +244,13 @@ test("a double click on evaluate sends one request", opts, async () => {
   await waitFor(async () => (await pendingCount()) >= 1, "the evaluation request");
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(await pendingCount(), 1);
+});
+
+test("a page-data read with photos hands them to the service worker", opts, async () => {
+  const photos = ["https://scontent.fake.fbcdn.net/a1.jpg", "https://scontent.fake.fbcdn.net/a2.jpg"];
+  await page.evaluate(`window.__t.photos = ${JSON.stringify(photos)}`);
+  await startEvaluatingA();
+  assert.deepEqual(await page.evaluate("window.__t.evaluations[0].images"), photos);
 });
 
 test("a refused read is logged with no listing content, and its reason appears in History", opts, async () => {

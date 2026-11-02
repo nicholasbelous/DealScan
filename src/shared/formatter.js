@@ -43,12 +43,21 @@ export function scoreColor(score) {
   return "var(--avoid)";
 }
 
-/** Why a verdict had no photos, or null if it had some. Only a panel read can gain them by reloading. */
+/**
+ * Why a verdict had no photos, or null if it had some. Says which case it was:
+ * photos off, none found in the page's data, or found but none downloaded.
+ * Only a panel read can gain them by reloading.
+ */
 export function noPhotosNotice(verdict, verifiedBy) {
   if (verdict.imagesAnalyzed > 0) return null;
   if (verdict.photoAnalysisOn === false) return "Evaluated without photos: photo analysis is off in Options.";
   if (verifiedBy === "panel_product_id") return "Evaluated without photos: reload to include them.";
-  return "Evaluated without photos: none could be loaded for this listing.";
+  if (verdict.imagesOffered === 0) return "Evaluated without photos: none were found in this page's listing data.";
+  if (verdict.imagesOffered > 0) {
+    const found = verdict.imagesOffered === 1 ? "1 photo was" : `${verdict.imagesOffered} photos were`;
+    return `Evaluated without photos: ${found} found, but none could be downloaded.`;
+  }
+  return "Evaluated without photos."; // a cached result from before imagesOffered was recorded
 }
 
 /** Truncate long text with an ellipsis for table cells / cards. */

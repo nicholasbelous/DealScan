@@ -14,23 +14,44 @@
       description: node.redacted_description?.text ?? null,
       condition: conditionText(node),
       location: locationText(node),
-      images: collectImageUrls(node),
+      images: listingPhotos(node.id),
     };
   }
 
   function findListingNode(itemId) {
-    // Some FB blobs are typed application/json, some aren't — scan any script
-    // that mentions this item and a listing field, then parse + walk it.
-    for (const script of document.querySelectorAll("script")) {
-      const text = script.textContent;
-      if (!text || text.length < 40) continue;
-      if (!text.includes(itemId) || !text.includes("marketplace_listing_title")) continue;
-      const json = extractJsonObject(text);
-      if (!json) continue;
-      const node = walkForListing(json, itemId);
+    for (const json of blobsMentioning(itemId, "marketplace_listing_title")) {
+      const node = walk(json, (n) => isListingNode(n, itemId));
       if (node) return node;
     }
     return null;
+  }
+
+  // Facebook can embed the same listing more than once, and the copy
+  // findListingNode reaches first may have no photos, or only the primary one.
+  // So photos come from whichever copy with this exact id lists the most.
+  function listingPhotos(itemId) {
+    let best = [];
+    for (const json of blobsMentioning(itemId, "_photo")) {
+      walk(json, (node) => {
+        if (node.id !== itemId) return false;
+        const urls = collectImageUrls(node);
+        if (urls.length > best.length) best = urls;
+        return false; // keep walking: a later copy may list more
+      });
+    }
+    return best;
+  }
+
+  // Some FB blobs are typed application/json, some aren't, so this scans any
+  // script that mentions the item and the given field name, and parses it.
+  function* blobsMentioning(itemId, field) {
+    for (const script of document.querySelectorAll("script")) {
+      const text = script.textContent;
+      if (!text || text.length < 40) continue;
+      if (!text.includes(itemId) || !text.includes(field)) continue;
+      const json = extractJsonObject(text);
+      if (json) yield json;
+    }
   }
 
   // A <script> may be pure JSON or JS that contains a JSON literal. Try a
@@ -50,20 +71,22 @@
     }
   }
 
-  // Depth-first search for the listing object: matching id AND a listing field.
-  function walkForListing(root, itemId) {
+  // The listing object: matching id AND a listing field.
+  function isListingNode(node, itemId) {
+    return node.id === itemId && (node.marketplace_listing_title != null || node.listing_price != null);
+  }
+
+  // Depth-first over a parsed blob, returning the first object `visit` accepts.
+  // The step limit matters: these blobs are huge, and a read must not freeze
+  // the page.
+  function walk(root, visit) {
     const stack = [root];
     let steps = 0;
     while (stack.length > 0 && steps < 400000) {
       const node = stack.pop();
       steps += 1;
       if (!node || typeof node !== "object") continue;
-      if (
-        node.id === itemId &&
-        (node.marketplace_listing_title != null || node.listing_price != null)
-      ) {
-        return node;
-      }
+      if (visit(node)) return node;
       for (const value of Object.values(node)) {
         if (value && typeof value === "object") stack.push(value);
       }

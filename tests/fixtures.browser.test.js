@@ -203,6 +203,21 @@ test("sanitizer: rebuilds embedded data from named fields only", opts, async () 
   assert.ok(listing.images[0].includes(FAKE_PHOTO_HOST));
 });
 
+test("sanitizer: keeps the photo count of the copy that lists the most", opts, async () => {
+  const bare = { id: SEEDS.itemId, marketplace_listing_title: SEEDS.title, listing_price: { formatted_amount: "$5" } };
+  const uri = (n) => ({ image: { uri: `https://scontent.xx.fbcdn.net/real-${n}.jpg` } });
+  const full = { id: SEEDS.itemId, listing_photos: [uri(1), uri(2), uri(3)] };
+  const html = `<!DOCTYPE html><html><head><title>${SEEDS.title}</title>
+    <script type="application/json">${JSON.stringify({ a: bare })}</script>
+    <script type="application/json">${JSON.stringify({ b: full })}</script></head>
+    <body><div role="main"><h1>${SEEDS.title}</h1></div></body></html>`;
+  const { output, res } = sanitize("copies", html);
+  assert.equal(res.status, 0, res.stderr);
+  assert.equal(output.includes("real-"), false);
+  const { listing } = await readFixture(output);
+  assert.equal(listing.images.length, 3);
+});
+
 test("sanitizer: warns when the result won't read as you expected", opts, () => {
   const { res } = sanitize("expectation", rawPage().replace(/\?product_id=\d+/g, ""));
   assert.match(res.stdout, /WARNING: you expected reliable/);

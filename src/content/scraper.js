@@ -98,6 +98,7 @@
         transitioning,
         title,
         price,
+        photos: data.images.length,
         via: [json, panelSource, dom].filter(Boolean).map((s) => s.via),
       });
     } catch {

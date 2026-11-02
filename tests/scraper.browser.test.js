@@ -136,6 +136,41 @@ test("a full reload still passes on embedded data, with its bare title", opts, a
   assert.equal(listing.verifiedBy, "embedded_data");
 });
 
+const photo = (name) => `https://scontent.fake.fbcdn.net/${name}.jpg`;
+const photos = (...names) => names.map((name) => ({ image: { uri: photo(name) } }));
+const jsonScript = (value) => `<script type="application/json">${JSON.stringify(value)}</script>`;
+
+test("a page-data read takes photos from the copy of the listing that has them", opts, async () => {
+  // Facebook can embed the same listing more than once. Here the copy the
+  // read verifies from has no photos, and a later copy has all three.
+  const bare = { id: ITEM, marketplace_listing_title: TITLE, listing_price: { formatted_amount: "$250" } };
+  const full = { id: ITEM, listing_photos: photos("a1", "a2", "a3") };
+  const html = page(jsonScript({ a: bare }) + jsonScript({ b: full }), TITLE);
+  const listing = parseListing(await scrape(html));
+  assert.equal(listing.verifiedBy, "embedded_data");
+  assert.deepEqual(listing.images, [photo("a1"), photo("a2"), photo("a3")]);
+});
+
+test("prefers the copy with the full photo list over one with only the primary photo", opts, async () => {
+  const partial = {
+    id: ITEM,
+    marketplace_listing_title: TITLE,
+    listing_price: { formatted_amount: "$250" },
+    primary_listing_photo: { image: { uri: photo("a1-small") } },
+  };
+  const full = { id: ITEM, listing_photos: photos("a1", "a2", "a3") };
+  const listing = parseListing(await scrape(page(jsonScript({ a: partial, b: full }), TITLE)));
+  assert.deepEqual(listing.images, [photo("a1"), photo("a2"), photo("a3")]);
+});
+
+test("never takes photos from another listing's data", opts, async () => {
+  const data = { id: ITEM, marketplace_listing_title: TITLE, listing_price: { formatted_amount: "$250" } };
+  const other = { id: `${ITEM}9`, listing_photos: photos("other1", "other2") };
+  const listing = parseListing(await scrape(page(jsonScript({ a: data, more: [other] }), TITLE)));
+  assert.equal(listing.reliable, true, listing.rejectReason);
+  assert.deepEqual(listing.images, []);
+});
+
 test("embedded data doesn't override a panel showing another listing", opts, async () => {
   const data = { id: ITEM, marketplace_listing_title: TITLE, listing_price: { formatted_amount: "$250" } };
   const script = `<script type="application/json">${JSON.stringify({ a: data })}</script>`;

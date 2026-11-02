@@ -71,29 +71,50 @@ export function sanitizeInPage({ itemId, itemPrefix, profilePrefix, photoHost })
   const fakeTitle = `${frame[1] ? "(1) " : ""}${frame[2] ? "Marketplace - " : ""}${fake(frame[3])}${frame[4] ? " | Facebook" : ""}`;
 
   // --- Embedded data: rebuild only this listing, from named fields -----------------
-  function findListingNode() {
+  function parseBlob(text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      /* not pure JSON: try from the first brace */
+    }
+    try {
+      return JSON.parse(text.slice(text.indexOf("{")));
+    } catch {
+      return null;
+    }
+  }
+
+  // Every object with this listing's id, in scripts that mention the id and `field`.
+  function* copiesOfListing(field) {
     for (const script of document.querySelectorAll("script")) {
       const text = script.textContent;
-      if (!text.includes(itemId) || !text.includes("marketplace_listing_title")) continue;
-      let root = null;
-      try {
-        root = JSON.parse(text);
-      } catch {
-        try {
-          root = JSON.parse(text.slice(text.indexOf("{")));
-        } catch {
-          continue;
-        }
-      }
-      const stack = [root];
+      if (!text.includes(itemId) || !text.includes(field)) continue;
+      const stack = [parseBlob(text)];
       for (let steps = 0; stack.length > 0 && steps < 400000; steps++) {
         const node = stack.pop();
         if (!node || typeof node !== "object") continue;
-        if (node.id === itemId && (node.marketplace_listing_title != null || node.listing_price != null)) return node;
+        if (node.id === itemId) yield node;
         stack.push(...Object.values(node).filter((v) => v && typeof v === "object"));
       }
     }
+  }
+
+  function findListingNode() {
+    for (const node of copiesOfListing("marketplace_listing_title")) {
+      if (node.marketplace_listing_title != null || node.listing_price != null) return node;
+    }
     return null;
+  }
+
+  // Facebook can embed the listing more than once, and the scraper takes photos
+  // from whichever copy lists the most, so the fixture keeps that many.
+  function photoCount() {
+    let most = 0;
+    for (const node of copiesOfListing("_photo")) {
+      const listed = Array.isArray(node.listing_photos) ? node.listing_photos.length : 0;
+      most = Math.max(most, listed || (node.primary_listing_photo ? 1 : 0));
+    }
+    return Math.min(most, 6);
   }
 
   const photoUrl = (n) => `https://${photoHost}/fake-${n}.jpg`;
@@ -109,7 +130,7 @@ export function sanitizeInPage({ itemId, itemPrefix, profilePrefix, photoHost })
       redacted_description: { text: textOf(node.redacted_description?.text) },
       condition: textOf(node.condition?.text ?? node.condition),
       location_text: { text: textOf(node.location_text?.text) },
-      listing_photos: (node.listing_photos ?? []).slice(0, 6).map((_, i) => ({ image: { uri: photoUrl(`json-${i + 1}`) } })),
+      listing_photos: Array.from({ length: photoCount() }, (_, i) => ({ image: { uri: photoUrl(`json-${i + 1}`) } })),
     };
   }
 
