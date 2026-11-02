@@ -1,3 +1,5 @@
+// The server's cache, per-token rate limit, and stats. Anthropic is mocked.
+
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 

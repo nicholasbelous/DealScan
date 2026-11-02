@@ -1,3 +1,5 @@
+// Percentiles, the cost summary, and ranking of rejection reasons.
+
 import test from "node:test";
 import assert from "node:assert/strict";
 

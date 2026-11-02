@@ -1,3 +1,6 @@
+// What is accepted from the model and what code computes itself: validation,
+// retry decisions, the schema, and finalizeVerdict.
+
 import test from "node:test";
 import assert from "node:assert/strict";
 

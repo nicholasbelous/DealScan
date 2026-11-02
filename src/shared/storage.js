@@ -1,8 +1,9 @@
-// chrome.storage.local wrapper for DealScan.
+// chrome.storage.local wrapper for DealScan: settings, saved history, the usage
+// log, and the read rejection log. Everything that persists goes through here.
 //
-// Single source of truth for everything we persist: user settings (API keys,
-// model choice) and saved deal history. Keeping all reads and writes here means
-// the rest of the extension never touches chrome.storage keys directly.
+// The only other storage is chrome.storage.session, which clears when the
+// browser closes. The service worker uses it for the one-hour result cache, and
+// the side panel and service worker use it for the page button's one-shot flag.
 
 const KEYS = {
   settings: "settings",

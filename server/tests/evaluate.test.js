@@ -1,3 +1,6 @@
+// POST /v1/evaluate and auth: model output validation, the budget cap, request
+// body checks, and what is stored and logged. Anthropic is mocked.
+
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { Writable } from "node:stream";

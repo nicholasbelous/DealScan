@@ -1,3 +1,6 @@
+// Price parsing, the reliability gate, listing normalization, and the rule for
+// reusing a cached result made without photos.
+
 import test from "node:test";
 import assert from "node:assert/strict";
 

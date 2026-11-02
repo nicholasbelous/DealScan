@@ -43,6 +43,7 @@ export function panelReducer(state, event) {
 
   switch (event.type) {
     case "navigated":
+      // Same listing (the URL changed but not the item): keep what's on screen.
       if (event.itemId === state.itemId) return state;
       return fresh({ ...state, itemId: event.itemId }, event.itemId ? "reading" : "not_marketplace");
 

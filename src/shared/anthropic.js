@@ -4,7 +4,8 @@
 //
 // Two cost-controlled modes:
 //   - default: Claude estimates market price from its own knowledge (cheap)
-//   - opt-in:  one web search for current prices (Options → Use web search)
+//   - opt-in:  web search for current prices, at most two searches
+//              (Options → Use web search)
 
 import { addUsage, costUsd, emptyUsage } from "./pricing.js";
 import { PROMPT_VERSION, buildSystemPrompt, buildUserContent } from "./prompt.js";

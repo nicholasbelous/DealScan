@@ -1,12 +1,17 @@
-// DealScan service worker — the extension's background brain.
+// DealScan service worker: the only part of the extension that makes network
+// requests.
 //
-// Responsibilities:
-//   1. Open the side panel (toolbar icon, or the floating page button).
-//   2. Route messages between content scripts (page) and the side panel (UI).
-//   3. Privileged work the page/UI can't do: fetch listing images cross-origin
-//      (the background context bypasses CORS for declared hosts) and call the
-//      Claude API. API keys never touch the page.
-//   4. Cache verdicts per listing URL so re-opening doesn't re-spend credit.
+//   1. Opens the side panel: from the toolbar icon, or from the page's
+//      "Evaluate Deal" button (OPEN_SIDE_PANEL), which also leaves a one-shot
+//      flag asking the panel to evaluate.
+//   2. Evaluates a listing for the panel (EVALUATE_LISTING): downloads photos
+//      cross-origin (the background context can, for declared hosts), then calls
+//      Anthropic directly or the DealScan server, and logs what it cost. API keys
+//      never touch the page.
+//   3. Caches results per listing URL for an hour, so re-opening doesn't re-spend.
+//
+// The side panel talks to the page's content scripts directly; those messages
+// don't pass through here.
 
 import { evaluateListing } from "../shared/claude.js";
 import { canReuseVerdict } from "../shared/parser.js";

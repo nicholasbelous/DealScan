@@ -1,3 +1,6 @@
+// Display helpers: the no-photos notice, where the asking price sits against the
+// market range, and cost formatting.
+
 import test from "node:test";
 import assert from "node:assert/strict";
 

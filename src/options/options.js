@@ -1,4 +1,5 @@
-// DealScan options page — API keys, model choice, data export.
+// DealScan options page: direct or server mode, the API key or server URL and
+// token, model, photo and web search options, and exporting or clearing local data.
 
 import {
   getSettings,

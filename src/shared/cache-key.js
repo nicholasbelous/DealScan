@@ -1,5 +1,7 @@
-// Identifies what was evaluated. A changed price, description, or photo is a
-// different hash. Uses Web Crypto, so it runs in the extension and on the server.
+// Identifies what was evaluated, for the server's cache. A changed price,
+// description, or photo is a different hash. Uses Web Crypto, which Node and
+// browsers both have. Direct mode doesn't use it: the service worker's cache is
+// keyed by listing URL.
 
 async function sha256(text) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));

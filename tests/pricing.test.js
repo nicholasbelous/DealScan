@@ -1,3 +1,5 @@
+// The cost of an evaluation from API usage and the pricing table.
+
 import test from "node:test";
 import assert from "node:assert/strict";
 

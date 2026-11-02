@@ -1,3 +1,5 @@
+// The local usage log and read rejection log, with chrome.storage stubbed.
+
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 

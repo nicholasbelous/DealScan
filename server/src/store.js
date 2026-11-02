@@ -1,5 +1,7 @@
 // All reads and writes for listings and evaluations.
 
+// One row per distinct content of a listing. Seeing the same content again keeps
+// the first row, so first_seen_at stays the first sighting.
 export function rememberListing(db, itemId, contentHash, listing, now) {
   db.prepare(
     `INSERT OR IGNORE INTO listings

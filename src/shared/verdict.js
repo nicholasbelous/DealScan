@@ -53,6 +53,8 @@ export function readVerdict(response, listing) {
   return reason ? { ok: false, retryable: true, reason: `Claude's answer ${reason}.` } : { ok: true, verdict: parsed };
 }
 
+// Web search mode sends no JSON schema, so the answer can arrive with text
+// around it. Take the outermost {...} and let validation judge the rest.
 function parseJsonFromText(response) {
   const text = (response.content ?? [])
     .filter((block) => block.type === "text")

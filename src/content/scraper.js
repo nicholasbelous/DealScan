@@ -1,4 +1,5 @@
-// DealScan scraper — runs inside facebook.com/marketplace pages.
+// DealScan scraper. Loaded on every facebook.com page (see manifest.json), and
+// reads the open listing only when the side panel asks.
 //
 // RELIABILITY MODEL
 // Facebook is a single-page app that bundles many listings into one page

@@ -1,3 +1,6 @@
+// The prompt: seller text stays inside its delimiters and can't break out, and
+// the scoring guide matches the bands code uses.
+
 import test from "node:test";
 import assert from "node:assert/strict";
 

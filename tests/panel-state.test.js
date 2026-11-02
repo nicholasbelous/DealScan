@@ -1,3 +1,7 @@
+// The side panel state machine as a pure reducer: its transitions, and results
+// from an old run being dropped. The same races run on the real page in
+// panel.browser.test.js.
+
 import test from "node:test";
 import assert from "node:assert/strict";
 
