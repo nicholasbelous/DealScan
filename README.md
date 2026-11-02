@@ -8,7 +8,7 @@ Two things in that path can be wrong: the read of the page, and Claude's answer.
 
 - [How DealScan works in 5 minutes](docs/OVERVIEW.md): start here. No code.
 - [Architecture](docs/ARCHITECTURE.md): diagrams of the system, one evaluation, the side panel's states, the server, and the database.
-- [Design decisions](docs/DECISIONS.md): what was chosen, what was rejected, and the tradeoffs.
+- [Design decisions](docs/DECISIONS.md): what was chosen, the alternatives, and the tradeoffs.
 - [Code map](docs/CODEMAP.md): every file in one line, and where to start reading.
 - [Testing](docs/TESTING.md): what the tests cover, what's mocked, and the live test checklist.
 - [Changelog](CHANGELOG.md)
