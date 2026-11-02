@@ -6,7 +6,7 @@ Every source file, grouped by area, with one line on what it does. The diagrams 
 
 This order follows one evaluation through the code:
 
-1. [ARCHITECTURE.md](ARCHITECTURE.md): the system and one evaluation, as diagrams.
+1. [OVERVIEW.md](OVERVIEW.md), then [ARCHITECTURE.md](ARCHITECTURE.md): what it does, then the pieces and one evaluation as simple diagrams.
 2. `manifest.json`: what loads where, and the permissions.
 3. `src/content/scraper.js`: what a read of the page contains, and where each field comes from.
 4. `src/shared/gate.js`: whether a read can be trusted. The first refusal point.
