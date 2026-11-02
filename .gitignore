@@ -20,8 +20,13 @@ store-assets/screenshots/raw/
 tests/fixtures/raw/
 tests/fixtures/review/
 
-# Server database
+# Server database, at the default path or wherever DB_PATH points
 server/data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 # Mock eval runs: their numbers mean nothing
 eval/results/*-MOCK.json
