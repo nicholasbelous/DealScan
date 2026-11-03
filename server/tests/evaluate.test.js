@@ -79,7 +79,7 @@ test("invalid output: retries once, rejects, and records the billed cost", async
   assert.ok(row.cost_usd > 0);
 });
 
-test("invalid output: rejects a good score on an above-market price", async () => {
+test("invalid output: rejects a Buy score on a clearly above-market price", async () => {
   const { post } = setup();
   const bad = { ...GOOD_ANSWER, score: 95, marketLow: 40, marketHigh: 60, suggestedOffer: 50 };
   mockAnthropic(apiReply(bad), apiReply(bad));

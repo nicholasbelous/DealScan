@@ -34,6 +34,14 @@ test("the prompt asks for no label, and its scoring guide has the bands code use
   }
 });
 
+test("the prompt states the same contradiction rule code enforces", () => {
+  for (const useWebSearch of [false, true]) {
+    const system = buildSystemPrompt(useWebSearch);
+    assert.match(system, /more than 10% above marketHigh, it is clearly\s+overpriced: score below 70/);
+    assert.equal(/score below 50/.test(system), false);
+  }
+});
+
 test("seller-written fields sit inside the delimiters", () => {
   const block = untrustedBlock(
     listingText({ title: INJECTION, description: INJECTION, condition: INJECTION, location: INJECTION })

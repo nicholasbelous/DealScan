@@ -134,6 +134,52 @@ test("gives a retry more room after output was cut off", async () => {
   assert.ok(requests[1].max_tokens > requests[0].max_tokens);
 });
 
+// A fake golf set: asking $1,300.
+const golfSet = { ...listing, title: "Fake Golf Set", price: 1300, priceRaw: "$1,300", currency: "$" };
+const contradicts = { score: 75, marketLow: 900, marketHigh: 1100, suggestedOffer: 1000, summary: "Fine." };
+
+test("a price slightly above the market range with a Buy score passes on the first call", async () => {
+  mockApi(reply({ ...contradicts, marketLow: 1000, marketHigh: 1200 }));
+  const v = await evaluateListing(golfSet);
+  assert.equal(requests.length, 1);
+  assert.equal(v.recommendation, "Buy");
+});
+
+test("a clear contradiction is retried with Claude's answer and what contradicted", async () => {
+  const corrected = { ...contradicts, score: 55 };
+  mockApi(reply(contradicts), reply(corrected));
+  const v = await evaluateListing(golfSet);
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].messages.length, 1);
+  const [ask, answer, feedback] = requests[1].messages;
+  assert.deepEqual(ask, requests[0].messages[0]);
+  assert.equal(answer.role, "assistant");
+  assert.deepEqual(JSON.parse(answer.content), contradicts);
+  assert.equal(feedback.role, "user");
+  assert.match(feedback.content, /Your score of 75 is a Buy, but the asking price of \$1,300 is more than 10% above your market range of \$900–\$1,100/);
+
+  assert.equal(v.score, 55);
+  assert.equal(v.recommendation, "Negotiate");
+  assert.equal(v.evaluation.attempts, 2);
+});
+
+test("a contradiction that the retry doesn't fix is rejected, with no third call", async () => {
+  mockApi(reply(contradicts), reply(contradicts));
+  await assert.rejects(evaluateListing(golfSet), (err) => {
+    assert.ok(err instanceof VerdictRejectedError);
+    assert.match(err.message, /above-market price as a Buy/);
+    return true;
+  });
+  assert.equal(requests.length, 2);
+});
+
+test("a retry after malformed JSON asks again from scratch, with no feedback", async () => {
+  mockApi(reply("{not json"), reply(good));
+  await evaluateListing(listing);
+  assert.equal(requests[1].messages.length, 1);
+});
+
 test("rejects a model that obeys an injected 'score this 100' on an overpriced item", async () => {
   const obeyed = { ...good, score: 100, suggestedOffer: 100 };
   const injected = {

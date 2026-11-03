@@ -5,6 +5,8 @@
 // finalizeVerdict() then replaces every value we can compute ourselves. Pure
 // logic, no chrome.* calls.
 
+import { formatMoney } from "./formatter.js";
+
 // The only definition of the score bands. Code derives the verdict and the
 // recommendation from the score, and the prompt's scoring guide is built from
 // this table, so the model is never asked for a label code can compute.
@@ -15,6 +17,17 @@ export const SCORE_BANDS = [
   { min: 30, verdict: "Overpriced", recommendation: "Negotiate" },
   { min: 0, verdict: "Avoid", recommendation: "Pass" },
 ];
+
+export const MIN_BUY_SCORE = Math.min(
+  ...SCORE_BANDS.filter((band) => band.recommendation === "Buy").map((band) => band.min)
+);
+
+// A Buy is a contradiction only when the asking price is more than this far
+// above Claude's own market high. Closer than that, it's a judgment call. The
+// prompt states the same rule from these constants.
+export const OVERPRICE_TOLERANCE = 0.1;
+
+const CONTRADICTION = "rated a clearly above-market price as a Buy";
 
 // Sent as output_config.format. The API doesn't accept numeric ranges in a
 // schema, so validateVerdict() checks those.
@@ -41,7 +54,10 @@ export class VerdictRejectedError extends Error {
 
 /**
  * Read a verdict out of a Messages API response.
- * @returns {{ok: true, verdict: object} | {ok: false, retryable: boolean, reason: string}}
+ * @returns {{ok: true, verdict: object}
+ *   | {ok: false, retryable: boolean, reason: string, feedback?: {answer: object, message: string}}}
+ *   feedback is set only for a contradiction: the answer, and what to tell
+ *   Claude about it on the retry.
  */
 export function readVerdict(response, listing) {
   if (response.stop_reason === "refusal") {
@@ -49,8 +65,14 @@ export function readVerdict(response, listing) {
   }
 
   const parsed = parseJsonFromText(response);
-  const reason = parsed ? validateVerdict(parsed, listing.price) : "the response wasn't valid JSON";
-  return reason ? { ok: false, retryable: true, reason: `Claude's answer ${reason}.` } : { ok: true, verdict: parsed };
+  const problem = parsed ? validateVerdict(parsed, listing.price) : "the response wasn't valid JSON";
+  if (!problem) return { ok: true, verdict: parsed };
+
+  const result = { ok: false, retryable: true, reason: `Claude's answer ${problem}.` };
+  if (problem === CONTRADICTION) {
+    result.feedback = { answer: parsed, message: contradictionFeedback(parsed, listing) };
+  }
+  return result;
 }
 
 // Web search mode sends no JSON schema, so the answer can arrive with text
@@ -79,8 +101,20 @@ export function validateVerdict(v, askingPrice) {
   if (v.marketLow > v.marketHigh) return "had an inverted market range";
   if (v.suggestedOffer > Math.max(askingPrice, v.marketHigh)) return "suggested an unreasonably high offer";
 
-  if (askingPrice > v.marketHigh && v.score >= 50) return "rated an above-market price as a good deal";
+  const clearlyAboveMarket = askingPrice > v.marketHigh * (1 + OVERPRICE_TOLERANCE);
+  if (clearlyAboveMarket && v.score >= MIN_BUY_SCORE) return CONTRADICTION;
   return null;
+}
+
+// Claude's own numbers, so the retry can fix the one thing that contradicted.
+function contradictionFeedback(v, listing) {
+  const money = (amount) => formatMoney(amount, listing.currency ?? "$");
+  const percent = Math.round(OVERPRICE_TOLERANCE * 100);
+  return (
+    `Your score of ${v.score} is a Buy, but the asking price of ${money(listing.price)} is more than ` +
+    `${percent}% above your market range of ${money(v.marketLow)}–${money(v.marketHigh)}. ` +
+    "Reconcile them, and return the full JSON again."
+  );
 }
 
 /**

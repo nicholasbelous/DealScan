@@ -51,13 +51,13 @@ Title and price come from the verified source alone. A panel read must also agre
 - Prices are finite and not negative, with the market low at or below the high.
 - The offer is no higher than the asking price or the market high, whichever is larger.
 - There is a summary.
-- The score is below 50 when the asking price is above the market high.
+- The score isn't in a Buy band when the asking price is more than 10% above the market high. Closer than that, a good score is a judgment call. The prompt states the same rule, built from the same constants.
 
-An invalid answer gets one retry, with more room for output. A refusal isn't retried. After that, the answer is rejected with `VerdictRejectedError`, which the panel shows differently from a failure. `finalizeVerdict()` then computes everything code can: the label, the recommendation, the percent versus the market midpoint, and an offer capped at the asking price.
+An invalid answer gets one retry, with more room for output. After a contradiction, the retry shows Claude its own answer and says exactly what contradicted, for example "Your score of 75 is a Buy, but the asking price of $1,300 is more than 10% above your market range of $900–$1,100. Reconcile them." Any other invalid answer is asked again from scratch. A refusal isn't retried. After that, the answer is rejected with `VerdictRejectedError`, which the panel shows differently from a failure. `finalizeVerdict()` then computes everything code can: the label, the recommendation, the percent versus the market midpoint, and an offer capped at the asking price.
 
-**Alternatives.** Repairing bad answers by clamping scores and swapping inverted ranges, which is what 1.2.1 did: broken answers looked fine. No retry at all. More than one retry.
+**Alternatives.** Repairing bad answers by clamping scores and swapping inverted ranges, which is what 1.2.1 did: broken answers looked fine. No retry at all. More than one retry. Rejecting any score of 50 or more at any price above the market high, which a development version did: live testing found a listing rejected twice by it, and a score of 50 to 69 already means Negotiate, not Buy. Retrying a contradiction without saying what was wrong, which that version also did.
 
-**Tradeoff.** A retry is billed. The checks catch contradictions, not a wrong market estimate: an answer that is consistent but wrong passes. Only the eval harness, with human labels, can measure that.
+**Tradeoff.** A retry is billed. The checks catch contradictions, not a wrong market estimate: an answer that is consistent but wrong passes. Only the eval harness, with human labels, can measure that. The 10% tolerance is a judgment, not a measurement. Told what contradicted, Claude can fix it by raising its market range rather than lowering the score, and code can't tell which of the two was wrong.
 
 ## 5. Seller text delimited as untrusted data
 
@@ -67,7 +67,7 @@ An invalid answer gets one retry, with more room for output. A refusal isn't ret
 
 **Alternatives.** No delimiting. A blocklist of suspicious phrases, which is easy to get around.
 
-**Tradeoff.** Delimiting reduces injection, it doesn't prevent it. Code catches an obeyed "score this 100" only when the price is above the market range. An injected score on a fairly priced listing passes validation. How the real model responds to injection hasn't been tested.
+**Tradeoff.** Delimiting reduces injection, it doesn't prevent it. Code catches an obeyed "score this 100" only when the price is more than 10% above the market range. An injected score on a fairly priced listing passes validation. How the real model responds to injection hasn't been tested.
 
 ## 6. Optional server mode, with direct mode as the default
 

@@ -57,12 +57,14 @@ export async function runEvaluation({ apiKey, model: chosenModel, useWebSearch =
 
   try {
     let result;
+    let messages = [{ role: "user", content }];
     for (attempts = 1; attempts <= MAX_EVALUATION_ATTEMPTS; attempts++) {
       const opts = { apiKey, headers, model, useWebSearch, maxTokens: MAX_TOKENS * attempts };
-      const response = await runTurn(opts, content, onUsage);
+      const response = await runTurn(opts, messages, onUsage);
       result = readVerdict(response, listing);
       if (result.ok) return { ...finalizeVerdict(result.verdict, listing), evaluation: record() };
       if (!result.retryable) break;
+      messages = retryMessages(content, result.feedback);
     }
     attempts = Math.min(attempts, MAX_EVALUATION_ATTEMPTS);
     throw new VerdictRejectedError(result.reason);
@@ -72,11 +74,23 @@ export async function runEvaluation({ apiKey, model: chosenModel, useWebSearch =
   }
 }
 
+// A retry asks again from scratch, except after a contradiction: then Claude
+// sees its own answer and exactly what contradicted, so it can reconcile them.
+function retryMessages(content, feedback) {
+  const ask = { role: "user", content };
+  if (!feedback) return [ask];
+  return [
+    ask,
+    { role: "assistant", content: JSON.stringify(feedback.answer) },
+    { role: "user", content: feedback.message },
+  ];
+}
+
 // One evaluation attempt. Only web search produces server-side pause_turn
 // continuations. A retry gets more max_tokens, since a cut-off answer can't
 // pass validation.
-async function runTurn(opts, content, onUsage) {
-  const messages = [{ role: "user", content }];
+async function runTurn(opts, conversation, onUsage) {
+  const messages = [...conversation];
 
   let response = await callMessages({ ...opts, messages });
   onUsage(response.usage);

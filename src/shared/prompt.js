@@ -1,9 +1,9 @@
 // Everything DealScan says to the model. Bump PROMPT_VERSION when the wording
 // changes, so results can be compared across prompts. Pure logic, no chrome.*.
 
-import { SCORE_BANDS } from "./verdict.js";
+import { MIN_BUY_SCORE, OVERPRICE_TOLERANCE, SCORE_BANDS } from "./verdict.js";
 
-export const PROMPT_VERSION = "4";
+export const PROMPT_VERSION = "5";
 
 // Spelled out as well as sent as output_config.format, because web search mode
 // relies on this text and code validation. No verdict or recommendation: code
@@ -72,6 +72,9 @@ const SCORING_GUIDE = SCORE_BANDS.map(
   (band, i) => `${band.min}-${i === 0 ? 100 : SCORE_BANDS[i - 1].min - 1} ${band.verdict}`
 ).join(", ");
 
+// The contradiction validateVerdict() rejects, from the same constants.
+const OVERPRICE_PERCENT = Math.round(OVERPRICE_TOLERANCE * 100);
+
 const PROMPT_RULES = `
 Return your evaluation as a SINGLE JSON object matching this exact shape, with
 no prose before or after it:
@@ -83,9 +86,10 @@ condition you see in the photos. A listing you flag as a scam scores in the
 Avoid band.
 
 Internal consistency is REQUIRED — score and summary must agree:
-- If the asking price is at or above marketHigh, the asking is OVERPRICED:
-  score below 50, and the summary must NOT call the price "competitive",
-  "fair", or "a good deal". Say it is above market and to negotiate down.
+- If the asking price is more than ${OVERPRICE_PERCENT}% above marketHigh, it is clearly
+  overpriced: score below ${MIN_BUY_SCORE}, so it is never a Buy.
+- If the asking price is above marketHigh at all, the summary must say so and
+  must NOT call the price "competitive" or "a good deal".
 - Only call pricing competitive/good when the asking price is at or below the
   market midpoint.
 - suggestedOffer is the negotiation target. It must not exceed the asking price.

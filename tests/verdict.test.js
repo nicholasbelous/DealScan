@@ -63,14 +63,32 @@ test("rejects an empty summary", () => {
   assert.match(validateVerdict(verdict({ summary: "  " }), 100), /no summary/);
 });
 
-test("rejects a good score on an above-market price", () => {
+test("rejects a Buy score on a price more than 10% above the market high", () => {
   const v = verdict({ score: 90, suggestedOffer: 100 });
-  assert.match(validateVerdict(v, 500), /above-market/);
+  assert.match(validateVerdict(v, 500), /above-market price as a Buy/);
 });
 
 test("accepts a low score on an above-market price", () => {
   const v = verdict({ score: 40, suggestedOffer: 100 });
   assert.equal(validateVerdict(v, 500), null);
+});
+
+test("accepts a Buy score on a price up to 10% above the market high: a judgment call", () => {
+  // Market high 120: 132 is exactly 10% above, 133 is more.
+  assert.equal(validateVerdict(verdict({ score: 90 }), 125), null);
+  assert.equal(validateVerdict(verdict({ score: 90 }), 132), null);
+  assert.match(validateVerdict(verdict({ score: 90 }), 133), /above-market/);
+});
+
+test("a borderline price with a good score passes: $1,300 against a $1,000–$1,200 range", () => {
+  const v = verdict({ score: 75, marketLow: 1000, marketHigh: 1200, suggestedOffer: 1150 });
+  assert.equal(validateVerdict(v, 1300), null);
+});
+
+test("on a clearly above-market price, only a Buy score is a contradiction", () => {
+  // Written out by hand: 70 is the lowest Buy score.
+  assert.equal(validateVerdict(verdict({ score: 69, suggestedOffer: 100 }), 500), null);
+  assert.match(validateVerdict(verdict({ score: 70, suggestedOffer: 100 }), 500), /above-market/);
 });
 
 test("accepts a free listing with an offer of 0", () => {
@@ -106,6 +124,27 @@ test("doesn't retry a refusal", () => {
   assert.equal(result.ok, false);
   assert.equal(result.retryable, false);
   assert.match(result.reason, /declined/);
+});
+
+test("a contradiction is retryable, with feedback that names Claude's own numbers", () => {
+  const answer = verdict({ score: 75, marketLow: 900, marketHigh: 1100, suggestedOffer: 1000 });
+  const result = readVerdict(textResponse(JSON.stringify(answer)), { price: 1300, currency: "$" });
+  assert.equal(result.ok, false);
+  assert.equal(result.retryable, true);
+  assert.match(result.reason, /above-market price as a Buy/);
+  assert.deepEqual(result.feedback.answer, answer);
+  assert.equal(
+    result.feedback.message,
+    "Your score of 75 is a Buy, but the asking price of $1,300 is more than 10% above your market range " +
+      "of $900–$1,100. Reconcile them, and return the full JSON again."
+  );
+});
+
+test("other invalid answers get no feedback, so the retry asks from scratch", () => {
+  const malformed = readVerdict(textResponse("{not json"), { price: 100 });
+  const badScore = readVerdict(textResponse(JSON.stringify(verdict({ score: 101 }))), { price: 100 });
+  assert.equal(malformed.feedback, undefined);
+  assert.equal(badScore.feedback, undefined);
 });
 
 test("the schema is one the API accepts: no numeric ranges, closed object", () => {
